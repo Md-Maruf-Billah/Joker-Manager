@@ -98,6 +98,11 @@ export default {
 
     try {
       const body = await readBody(request);
+      const query: Record<string, string> = {};
+      url.searchParams.forEach((value, key) => {
+        query[key] = value;
+      });
+
       const upstream = await fetch(env.APPS_SCRIPT_URL, {
         method: "POST",
         headers: {
@@ -107,7 +112,7 @@ export default {
           token: env.APPS_SCRIPT_TOKEN,
           path: url.pathname,
           method: request.method,
-          query: Object.fromEntries(url.searchParams.entries()),
+          query,
           body
         })
       });
