@@ -2,6 +2,8 @@
 
 Internal tracking and TV display tool for PlayLive Melbourne Joker Jackpot promotion.
 
+Deployed automatically to Cloudflare Pages and Workers on every push to `main`.
+
 This repo now contains:
 
 - React + Vite + TypeScript frontend.
