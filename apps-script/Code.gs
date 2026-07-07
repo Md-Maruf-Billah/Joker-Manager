@@ -74,6 +74,22 @@ const FULL_DECK = [JOKER_CODE].concat(
 
 function setupJokerJackpotDatabase() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const staffSheet = ss.getSheetByName("Staff");
+
+  if (staffSheet && staffSheet.getLastRow() > 1) {
+    const ui = SpreadsheetApp.getUi();
+    const response = ui.prompt(
+      "Re-initialize database",
+      "This Sheet already has data. Running this again will ERASE every tournament, the jackpot state, the audit log, and all staff accounts, resetting everything back to defaults. Type RESET to confirm.",
+      ui.ButtonSet.OK_CANCEL
+    );
+
+    if (response.getSelectedButton() !== ui.Button.OK || response.getResponseText() !== "RESET") {
+      ui.alert("Cancelled. No changes were made.");
+      return;
+    }
+  }
+
   ensurePasswordSalt_();
 
   Object.keys(SHEET_HEADERS).forEach(function (name) {
