@@ -1,3 +1,4 @@
+// Deployed automatically via Cloudflare Workers Builds on push to main.
 export interface Env {
   APPS_SCRIPT_URL: string;
   APPS_SCRIPT_TOKEN: string;
