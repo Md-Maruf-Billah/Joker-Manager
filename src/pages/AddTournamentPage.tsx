@@ -93,6 +93,7 @@ export function AddTournamentPage() {
           <PanelHeader title="Tournament details">Only active Joker tournament types are available.</PanelHeader>
           <form className="grid gap-4 p-5" onSubmit={submit}>
             <SelectField
+              key={types.length}
               label="Tournament type"
               value={tournamentTypeId}
               onValueChange={setTournamentTypeId}

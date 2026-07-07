@@ -3,10 +3,12 @@ import { Button } from "./Button";
 
 export function HoldButton({
   onComplete,
-  disabled
+  disabled,
+  label = "Hold 2 seconds to confirm Joker hit"
 }: {
   onComplete: () => void;
   disabled?: boolean;
+  label?: string;
 }) {
   const [progress, setProgress] = useState(0);
   const frame = useRef<number | null>(null);
@@ -61,7 +63,7 @@ export function HoldButton({
         className="absolute inset-y-0 left-0 bg-joker-red/35"
         style={{ width: `${Math.round(progress * 100)}%` }}
       />
-      <span className="relative">Hold 2 seconds to confirm Joker hit</span>
+      <span className="relative">{label}</span>
     </Button>
   );
 }

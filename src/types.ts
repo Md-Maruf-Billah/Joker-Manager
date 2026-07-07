@@ -74,6 +74,7 @@ export type AuditLogEntry = {
     | "CREATE_RUN"
     | "SUBMIT_DRAW"
     | "EDIT_RUN"
+    | "VOID_RUN"
     | "MANUAL_ADJUSTMENT"
     | "SAVE_TOURNAMENT_TYPE"
     | "VERIFY_PASSWORD";
@@ -187,4 +188,20 @@ export type UpsertTournamentTypePayload = {
   active: boolean;
   staffName: string;
   pin: string;
+};
+
+export type EditRunPayload = {
+  runId: string;
+  staffName: string;
+  pin: string;
+  reason: string;
+  winnerName?: string;
+  entries?: number;
+};
+
+export type VoidRunPayload = {
+  runId: string;
+  staffName: string;
+  pin: string;
+  reason: string;
 };

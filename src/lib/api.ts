@@ -1,10 +1,12 @@
 import type {
   AdminAdjustmentPayload,
   CreateTournamentPayload,
+  EditRunPayload,
   JokerData,
   StaffSession,
   SubmitDrawPayload,
-  UpsertTournamentTypePayload
+  UpsertTournamentTypePayload,
+  VoidRunPayload
 } from "../types";
 import { appError } from "./errors";
 import { mockApi } from "./mockApi";
@@ -112,6 +114,26 @@ export const api = {
     }
 
     return request("/api/history");
+  },
+  editRun(payload: EditRunPayload) {
+    if (!API_BASE_URL) {
+      return mockApi.editRun(payload);
+    }
+
+    return request("/api/run/edit", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  voidRun(payload: VoidRunPayload) {
+    if (!API_BASE_URL) {
+      return mockApi.voidRun(payload);
+    }
+
+    return request("/api/run/void", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
   },
   auditLog() {
     if (!API_BASE_URL) {

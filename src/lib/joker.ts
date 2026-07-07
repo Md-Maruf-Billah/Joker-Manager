@@ -3,6 +3,7 @@ import type {
   AuditLogEntry,
   CreateTournamentPayload,
   DashboardData,
+  EditRunPayload,
   JokerData,
   JackpotCycle,
   RemovedCard,
@@ -13,7 +14,8 @@ import type {
   TournamentType,
   TvDisplayData,
   TvTier,
-  UpsertTournamentTypePayload
+  UpsertTournamentTypePayload,
+  VoidRunPayload
 } from "../types";
 import { FULL_DECK, JOKER_CODE, buildCardViews, cardLabel, isJoker } from "./cards";
 import { appError } from "./errors";
@@ -166,8 +168,8 @@ export function createInitialData(): JokerData {
       currentCycleId: "CYCLE_002",
       currentJackpot: 9760,
       cardsRemaining: STARTING_DECK_SIZE - removedCards.length,
-      lastCardPulled: seedRemovedCodes[0],
-      lastRunId: "RUN_SEED_001",
+      lastCardPulled: seedRemovedCodes[7],
+      lastRunId: "RUN_SEED_008",
       lastUpdated: seedTime
     },
     runs,
@@ -530,6 +532,157 @@ export function submitDrawResult(data: JokerData, payload: SubmitDrawPayload) {
       jokerHit ? "Joker hit confirmed" : "Draw submitted",
       "dashboard"
     )
+  );
+
+  return run;
+}
+
+function findMostRecentReference(data: JokerData, excludeRunId: string) {
+  const candidate = [...data.runs]
+    .filter((run) => run.status === "Complete" && run.runId !== excludeRunId)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+
+  return {
+    lastRunId: candidate ? candidate.runId : null,
+    lastCardPulled: candidate ? candidate.cardPulled : null
+  };
+}
+
+export function editRun(data: JokerData, payload: EditRunPayload) {
+  const staff = verifyPin(data, payload.staffName, payload.pin);
+  const run = data.runs.find((item) => item.runId === payload.runId);
+
+  if (!run) {
+    throw appError("JM-EDIT-001", "Tournament run was not found.");
+  }
+
+  if (run.status === "Voided") {
+    throw appError("JM-EDIT-002", "Voided runs cannot be edited.");
+  }
+
+  if (!payload.reason.trim()) {
+    throw appError("JM-EDIT-003", "A reason is required for edits.");
+  }
+
+  const winnerName = payload.winnerName?.trim();
+  if (winnerName !== undefined) {
+    if (!winnerName) {
+      throw appError("JM-EDIT-004", "Winner name cannot be blank.");
+    }
+    if (run.status !== "Complete") {
+      throw appError("JM-EDIT-005", "Winner name can only be corrected after the draw is submitted.");
+    }
+  }
+
+  let newEntries: number | undefined;
+  if (payload.entries !== undefined) {
+    if (run.status !== "Awaiting Draw") {
+      throw appError("JM-EDIT-006", "Entries can only be corrected before the draw is submitted.");
+    }
+    newEntries = Number(payload.entries);
+    if (!Number.isInteger(newEntries) || newEntries <= 0) {
+      throw appError("JM-EDIT-007", "Entries must be a positive whole number.");
+    }
+  }
+
+  const timestamp = nowIso();
+  const changes: Array<{ field: string; oldValue: string; newValue: string }> = [];
+
+  if (winnerName !== undefined && winnerName !== run.winnerName) {
+    changes.push({ field: "winnerName", oldValue: run.winnerName ?? "", newValue: winnerName });
+    run.winnerName = winnerName;
+
+    const removed = data.removedCards.find((item) => item.runId === run.runId);
+    if (removed) {
+      removed.playerName = winnerName;
+    }
+  }
+
+  if (newEntries !== undefined && newEntries !== run.entries) {
+    const newContribution = newEntries * run.jackpotPerEntry;
+    const contributionDelta = newContribution - run.contribution;
+
+    changes.push({ field: "entries", oldValue: String(run.entries), newValue: String(newEntries) });
+    run.entries = newEntries;
+    run.contribution = newContribution;
+    run.availableJackpot += contributionDelta;
+    run.closingJackpot = run.availableJackpot;
+
+    data.jackpotState.currentJackpot += contributionDelta;
+    getActiveCycle(data).totalContributions += contributionDelta;
+  }
+
+  if (changes.length === 0) {
+    throw appError("JM-EDIT-008", "No changes were made.");
+  }
+
+  run.updatedAt = timestamp;
+  data.jackpotState.lastUpdated = timestamp;
+
+  changes.forEach((change) => {
+    data.auditLog.push(
+      audit(
+        staff.staffName,
+        staff.role,
+        "EDIT_RUN",
+        run.runId,
+        change.field,
+        change.oldValue,
+        change.newValue,
+        payload.reason,
+        "dashboard"
+      )
+    );
+  });
+
+  return run;
+}
+
+export function voidRun(data: JokerData, payload: VoidRunPayload) {
+  const staff = verifyPin(data, payload.staffName, payload.pin);
+  const run = data.runs.find((item) => item.runId === payload.runId);
+
+  if (!run) {
+    throw appError("JM-VOID-001", "Tournament run was not found.");
+  }
+
+  if (run.status === "Voided") {
+    throw appError("JM-VOID-002", "This run has already been voided.");
+  }
+
+  if (!payload.reason.trim()) {
+    throw appError("JM-VOID-003", "A reason is required to void a run.");
+  }
+
+  if (run.jokerHit) {
+    throw appError("JM-VOID-004", "Joker-hit runs cannot be voided. Use a manual admin adjustment instead.");
+  }
+
+  if (run.runId !== data.jackpotState.lastRunId) {
+    throw appError("JM-VOID-005", "Only the most recent tournament run can be voided.");
+  }
+
+  const timestamp = nowIso();
+  const oldStatus = run.status;
+
+  data.jackpotState.currentJackpot = run.openingJackpot;
+  getActiveCycle(data).totalContributions -= run.contribution;
+
+  if (oldStatus === "Complete") {
+    data.jackpotState.cardsRemaining = run.cardsBefore;
+    data.removedCards = data.removedCards.filter((item) => item.runId !== run.runId);
+  }
+
+  run.status = "Voided";
+  run.updatedAt = timestamp;
+
+  const reference = findMostRecentReference(data, run.runId);
+  data.jackpotState.lastRunId = reference.lastRunId;
+  data.jackpotState.lastCardPulled = reference.lastCardPulled;
+  data.jackpotState.lastUpdated = timestamp;
+
+  data.auditLog.push(
+    audit(staff.staffName, staff.role, "VOID_RUN", run.runId, "status", oldStatus, "Voided", payload.reason, "dashboard")
   );
 
   return run;

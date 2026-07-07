@@ -157,6 +157,14 @@ function handleRequest_(payload) {
       });
     case "/api/history":
       return getHistory_();
+    case "/api/run/edit":
+      return withLock_(function () {
+        return editRun_(body);
+      });
+    case "/api/run/void":
+      return withLock_(function () {
+        return voidRun_(body);
+      });
     case "/api/admin/audit-log":
       return getAuditLog_();
     case "/api/admin/export-backup":
@@ -391,6 +399,177 @@ function getHistory_() {
   return getObjects_("Tournament_Runs")
     .map(runFromRow_)
     .sort(function (a, b) { return b.updatedAt.localeCompare(a.updatedAt); });
+}
+
+function findMostRecentReference_(excludeRunId) {
+  const candidate = getObjects_("Tournament_Runs")
+    .map(runFromRow_)
+    .filter(function (run) { return run.status === "Complete" && run.runId !== excludeRunId; })
+    .sort(function (a, b) { return b.updatedAt.localeCompare(a.updatedAt); })[0];
+
+  return {
+    lastRunId: candidate ? candidate.runId : "",
+    lastCardPulled: candidate ? candidate.cardPulled || "" : ""
+  };
+}
+
+function editRun_(body) {
+  const staff = verifyPin_(body.staffName, body.pin, "staff");
+  const runRow = getObjects_("Tournament_Runs").find(function (row) { return row.RunID === body.runId; });
+
+  if (!runRow) {
+    throw new Error("[JM-EDIT-001] Tournament run was not found.");
+  }
+
+  if (runRow.Status === "Voided") {
+    throw new Error("[JM-EDIT-002] Voided runs cannot be edited.");
+  }
+
+  const reason = String(body.reason || "").trim();
+  if (!reason) {
+    throw new Error("[JM-EDIT-003] A reason is required for edits.");
+  }
+
+  const hasWinnerName = body.winnerName !== undefined && body.winnerName !== null;
+  const winnerName = hasWinnerName ? String(body.winnerName).trim() : null;
+  if (hasWinnerName) {
+    if (!winnerName) {
+      throw new Error("[JM-EDIT-004] Winner name cannot be blank.");
+    }
+    if (runRow.Status !== "Complete") {
+      throw new Error("[JM-EDIT-005] Winner name can only be corrected after the draw is submitted.");
+    }
+  }
+
+  const hasEntries = body.entries !== undefined && body.entries !== null;
+  let newEntries;
+  if (hasEntries) {
+    if (runRow.Status !== "Awaiting Draw") {
+      throw new Error("[JM-EDIT-006] Entries can only be corrected before the draw is submitted.");
+    }
+    newEntries = Number(body.entries);
+    if (!Number.isInteger(newEntries) || newEntries <= 0) {
+      throw new Error("[JM-EDIT-007] Entries must be a positive whole number.");
+    }
+  }
+
+  const now = new Date();
+  const runUpdates = {};
+  const changes = [];
+
+  if (hasWinnerName && winnerName !== String(runRow.WinnerName || "")) {
+    changes.push({ field: "winnerName", oldValue: String(runRow.WinnerName || ""), newValue: winnerName });
+    runUpdates.WinnerName = winnerName;
+
+    const removedRow = getObjects_("Removed_Cards").find(function (row) { return row.RunID === runRow.RunID; });
+    if (removedRow) {
+      updateObjectByKey_("Removed_Cards", "RunID", runRow.RunID, { PlayerName: winnerName });
+    }
+  }
+
+  if (hasEntries && newEntries !== Number(runRow.Entries)) {
+    const newContribution = newEntries * Number(runRow.JackpotPerEntry);
+    const contributionDelta = newContribution - Number(runRow.Contribution);
+    const newAvailableJackpot = Number(runRow.AvailableJackpot) + contributionDelta;
+
+    changes.push({ field: "entries", oldValue: String(runRow.Entries), newValue: String(newEntries) });
+    runUpdates.Entries = newEntries;
+    runUpdates.Contribution = newContribution;
+    runUpdates.AvailableJackpot = newAvailableJackpot;
+    runUpdates.ClosingJackpot = newAvailableJackpot;
+
+    const state = getCurrentState_();
+    updateObjectByKey_("Jackpot_State", "JackpotID", "JOKER_MAIN", {
+      CurrentJackpot: Number(state.currentJackpot) + contributionDelta,
+      LastUpdated: now
+    });
+
+    const cycle = getActiveCycleRow_();
+    updateObjectByKey_("Jackpot_Cycles", "CycleID", cycle.CycleID, {
+      TotalContributions: Number(cycle.TotalContributions || 0) + contributionDelta
+    });
+  }
+
+  if (!changes.length) {
+    throw new Error("[JM-EDIT-008] No changes were made.");
+  }
+
+  runUpdates.UpdatedAt = now;
+  updateObjectByKey_("Tournament_Runs", "RunID", runRow.RunID, runUpdates);
+
+  changes.forEach(function (change) {
+    writeAudit_(staff, "EDIT_RUN", runRow.RunID, change.field, change.oldValue, change.newValue, reason, "dashboard");
+  });
+
+  return runFromRow_(Object.assign({}, runRow, runUpdates));
+}
+
+function voidRun_(body) {
+  const staff = verifyPin_(body.staffName, body.pin, "staff");
+  const runRow = getObjects_("Tournament_Runs").find(function (row) { return row.RunID === body.runId; });
+
+  if (!runRow) {
+    throw new Error("[JM-VOID-001] Tournament run was not found.");
+  }
+
+  if (runRow.Status === "Voided") {
+    throw new Error("[JM-VOID-002] This run has already been voided.");
+  }
+
+  const reason = String(body.reason || "").trim();
+  if (!reason) {
+    throw new Error("[JM-VOID-003] A reason is required to void a run.");
+  }
+
+  if (String(runRow.JokerHit).toLowerCase() === "true") {
+    throw new Error("[JM-VOID-004] Joker-hit runs cannot be voided. Use a manual admin adjustment instead.");
+  }
+
+  const state = getCurrentState_();
+  if (runRow.RunID !== state.lastRunId) {
+    throw new Error("[JM-VOID-005] Only the most recent tournament run can be voided.");
+  }
+
+  const now = new Date();
+  const oldStatus = runRow.Status;
+  const cycle = getActiveCycleRow_();
+
+  updateObjectByKey_("Jackpot_Cycles", "CycleID", cycle.CycleID, {
+    TotalContributions: Number(cycle.TotalContributions || 0) - Number(runRow.Contribution)
+  });
+
+  const stateUpdates = {
+    CurrentJackpot: Number(runRow.OpeningJackpot),
+    LastUpdated: now
+  };
+
+  if (oldStatus === "Complete") {
+    stateUpdates.CardsRemaining = Number(runRow.CardsBefore);
+    deleteRemovedCardForRun_(runRow.RunID);
+  }
+
+  updateObjectByKey_("Tournament_Runs", "RunID", runRow.RunID, { Status: "Voided", UpdatedAt: now });
+
+  const reference = findMostRecentReference_(runRow.RunID);
+  stateUpdates.LastRunID = reference.lastRunId;
+  stateUpdates.LastCardPulled = reference.lastCardPulled;
+  updateObjectByKey_("Jackpot_State", "JackpotID", "JOKER_MAIN", stateUpdates);
+
+  writeAudit_(staff, "VOID_RUN", runRow.RunID, "status", oldStatus, "Voided", reason, "dashboard");
+  return runFromRow_(Object.assign({}, runRow, { Status: "Voided", UpdatedAt: now }));
+}
+
+function deleteRemovedCardForRun_(runId) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Removed_Cards");
+  if (!sheet || sheet.getLastRow() < 2) return;
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const runColumn = headers.indexOf("RunID") + 1;
+  for (let row = sheet.getLastRow(); row >= 2; row--) {
+    if (String(sheet.getRange(row, runColumn).getValue()) === String(runId)) {
+      sheet.deleteRow(row);
+    }
+  }
 }
 
 function exportBackup_() {

@@ -19,6 +19,7 @@ const routes: Record<string, RouteConfig> = {
   "/api/draw/submit": { methods: ["POST"] },
   "/api/history": { methods: ["GET"] },
   "/api/run/edit": { methods: ["POST"] },
+  "/api/run/void": { methods: ["POST"] },
   "/api/admin/adjustment": { methods: ["POST"] },
   "/api/admin/audit-log": { methods: ["GET"] },
   "/api/admin/export-backup": { methods: ["GET"] },

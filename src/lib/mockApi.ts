@@ -1,15 +1,18 @@
 import type {
   AdminAdjustmentPayload,
   CreateTournamentPayload,
+  EditRunPayload,
   JokerData,
   StaffSession,
   SubmitDrawPayload,
-  UpsertTournamentTypePayload
+  UpsertTournamentTypePayload,
+  VoidRunPayload
 } from "../types";
 import {
   applyAdminAdjustment,
   createInitialData,
   createTournamentRun,
+  editRun,
   getCards,
   getDashboardData,
   getPendingRun,
@@ -17,7 +20,8 @@ import {
   normalizeData,
   submitDrawResult,
   upsertTournamentType,
-  verifyPin
+  verifyPin,
+  voidRun
 } from "./joker";
 
 const STORE_KEY = "joker-jackpot-demo-data";
@@ -120,6 +124,12 @@ export const mockApi = {
   },
   async history() {
     return withData((data) => [...data.runs].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+  },
+  async editRun(payload: EditRunPayload) {
+    return withData((data) => editRun(data, payload));
+  },
+  async voidRun(payload: VoidRunPayload) {
+    return withData((data) => voidRun(data, payload));
   },
   async auditLog() {
     return withData((data) => [...data.auditLog].sort((a, b) => b.timestamp.localeCompare(a.timestamp)));

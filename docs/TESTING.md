@@ -27,6 +27,20 @@
 - Probability tier: `20` to `11`.
 - Danger tier: `10` to `1`.
 
+## Edit And Void
+
+- Winner name can be corrected on a `Complete` run with a reason and staff password.
+- Entries can be corrected on an `Awaiting Draw` run; contribution and jackpot recompute automatically.
+- Entries cannot be edited once a run is `Complete`.
+- Winner name cannot be edited on an `Awaiting Draw` run.
+- Voided runs cannot be edited.
+- Voiding an `Awaiting Draw` run cancels it and reverses its contribution from the jackpot, leaving no pending draw.
+- Voiding the latest `Complete` non-Joker run restores cards remaining, removes its `Removed_Cards` entry, and reverses its contribution.
+- Void is blocked for Joker-hit runs (use a manual admin adjustment instead).
+- Void is blocked for any run that is not the current `lastRunId` (only the most recent run can be voided).
+- Void is blocked for runs already `Voided`.
+- Voiding requires a reason, the staff password, and a 2-second hold to confirm.
+
 ## Security And Audit
 
 - Wrong staff password blocks write action.
