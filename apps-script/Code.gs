@@ -74,7 +74,7 @@ const FULL_DECK = [JOKER_CODE].concat(
 
 function setupJokerJackpotDatabase() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  ensurePinSalt_();
+  ensurePasswordSalt_();
 
   Object.keys(SHEET_HEADERS).forEach(function (name) {
     const sheet = ss.getSheetByName(name) || ss.insertSheet(name);
