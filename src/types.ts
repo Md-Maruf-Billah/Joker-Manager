@@ -77,7 +77,10 @@ export type AuditLogEntry = {
     | "VOID_RUN"
     | "MANUAL_ADJUSTMENT"
     | "SAVE_TOURNAMENT_TYPE"
-    | "VERIFY_PASSWORD";
+    | "VERIFY_PASSWORD"
+    | "CREATE_STAFF"
+    | "SET_STAFF_PIN"
+    | "SET_STAFF_ACTIVE";
   recordId: string;
   fieldChanged: string;
   oldValue: string;
@@ -90,6 +93,13 @@ export type StaffMember = {
   staffId: string;
   staffName: string;
   passwordHash: string;
+  role: Role;
+  active: boolean;
+};
+
+export type StaffListItem = {
+  staffId: string;
+  staffName: string;
   role: Role;
   active: boolean;
 };
@@ -204,4 +214,25 @@ export type VoidRunPayload = {
   staffName: string;
   pin: string;
   reason: string;
+};
+
+export type CreateStaffPayload = {
+  newStaffName: string;
+  newPin: string;
+  staffName: string;
+  pin: string;
+};
+
+export type SetStaffPinPayload = {
+  targetStaffName: string;
+  newPin: string;
+  staffName: string;
+  pin: string;
+};
+
+export type SetStaffActivePayload = {
+  targetStaffName: string;
+  active: boolean;
+  staffName: string;
+  pin: string;
 };

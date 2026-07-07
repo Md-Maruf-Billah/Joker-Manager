@@ -210,6 +210,20 @@ function handleRequest_(payload) {
       return withLock_(function () {
         return adminAdjustment_(body);
       });
+    case "/api/admin/staff":
+      return getStaffList_();
+    case "/api/admin/staff/create":
+      return withLock_(function () {
+        return createStaff_(body);
+      });
+    case "/api/admin/staff/set-pin":
+      return withLock_(function () {
+        return setStaffPin_(body);
+      });
+    case "/api/admin/staff/set-active":
+      return withLock_(function () {
+        return setStaffActive_(body);
+      });
     default:
       throw new Error("[JM-SCRIPT-003] Unknown route: " + payload.path);
   }
@@ -883,6 +897,111 @@ function verifyPin_(staffName, pin, requiredRole) {
   }
 
   return staff;
+}
+
+function staffListItemFromRow_(row) {
+  return {
+    staffId: String(row.StaffID),
+    staffName: String(row.StaffName),
+    role: String(row.Role),
+    active: String(row.Active).toLowerCase() === "true"
+  };
+}
+
+function getStaffList_() {
+  return getObjects_("Staff").map(staffListItemFromRow_);
+}
+
+function createStaff_(body) {
+  const staff = verifyPin_(body.staffName, body.pin, "staff");
+  const newStaffName = String(body.newStaffName || "").trim();
+  const newPin = String(body.newPin || "");
+
+  if (!newStaffName) {
+    throw new Error("[JM-STAFF-001] Staff name is required.");
+  }
+
+  if (newPin.length < 4) {
+    throw new Error("[JM-STAFF-002] PIN must be at least 4 characters.");
+  }
+
+  const existing = getObjects_("Staff").find(function (row) {
+    return String(row.StaffName).toLowerCase() === newStaffName.toLowerCase();
+  });
+
+  if (existing) {
+    throw new Error("[JM-STAFF-003] A staff member with that name already exists.");
+  }
+
+  const newStaffId = newId_("STAFF");
+  appendObject_("Staff", {
+    StaffID: newStaffId,
+    StaffName: newStaffName,
+    PasswordHash: hashPassword_(newPin),
+    Role: "staff",
+    Active: true
+  });
+
+  writeAudit_(staff, "CREATE_STAFF", newStaffId, "staffName", "", newStaffName, "Staff member added", "admin");
+  return staffListItemFromRow_({ StaffID: newStaffId, StaffName: newStaffName, Role: "staff", Active: true });
+}
+
+function setStaffPin_(body) {
+  const staff = verifyPin_(body.staffName, body.pin, "staff");
+  const newPin = String(body.newPin || "");
+
+  if (newPin.length < 4) {
+    throw new Error("[JM-STAFF-004] PIN must be at least 4 characters.");
+  }
+
+  const target = getObjects_("Staff").find(function (row) {
+    return String(row.StaffName).toLowerCase() === String(body.targetStaffName || "").trim().toLowerCase();
+  });
+
+  if (!target) {
+    throw new Error("[JM-STAFF-005] Staff member was not found.");
+  }
+
+  updateObjectByKey_("Staff", "StaffName", target.StaffName, { PasswordHash: hashPassword_(newPin) });
+  writeAudit_(staff, "SET_STAFF_PIN", target.StaffID, "passwordHash", "", "", "PIN reset", "admin");
+  return staffListItemFromRow_(target);
+}
+
+function setStaffActive_(body) {
+  const staff = verifyPin_(body.staffName, body.pin, "staff");
+  const target = getObjects_("Staff").find(function (row) {
+    return String(row.StaffName).toLowerCase() === String(body.targetStaffName || "").trim().toLowerCase();
+  });
+
+  if (!target) {
+    throw new Error("[JM-STAFF-005] Staff member was not found.");
+  }
+
+  const active = Boolean(body.active);
+
+  if (!active) {
+    const otherActiveCount = getObjects_("Staff").filter(function (row) {
+      return String(row.Active).toLowerCase() === "true" && row.StaffID !== target.StaffID;
+    }).length;
+
+    if (otherActiveCount === 0) {
+      throw new Error("[JM-STAFF-006] At least one active staff member must remain.");
+    }
+  }
+
+  const oldValue = String(target.Active);
+  updateObjectByKey_("Staff", "StaffName", target.StaffName, { Active: active });
+  writeAudit_(
+    staff,
+    "SET_STAFF_ACTIVE",
+    target.StaffID,
+    "active",
+    oldValue,
+    String(active),
+    active ? "Staff reactivated" : "Staff deactivated",
+    "admin"
+  );
+  return staffListItemFromRow_({ StaffID: target.StaffID, StaffName: target.StaffName, Role: target.Role, Active: active });
 }
 
 function writeAudit_(staff, action, recordId, fieldChanged, oldValue, newValue, reason, source) {

@@ -1,6 +1,7 @@
 import type {
   AdminAdjustmentPayload,
   AuditLogEntry,
+  CreateStaffPayload,
   CreateTournamentPayload,
   DashboardData,
   EditRunPayload,
@@ -8,6 +9,8 @@ import type {
   JackpotCycle,
   RemovedCard,
   Role,
+  SetStaffActivePayload,
+  SetStaffPinPayload,
   StaffMember,
   SubmitDrawPayload,
   TournamentRun,
@@ -60,19 +63,18 @@ const seedRemovedCodes = [
   "5H"
 ];
 
+// Mock mode has no real backend to hash against, so passwordHash here just
+// holds the plaintext PIN directly. The real Apps Script backend always
+// stores a salted SHA-256 hash instead; see hashPassword_ in Code.gs.
 const seedStaff: StaffMember[] = [
   {
     staffId: "STAFF_001",
     staffName: "staff",
-    passwordHash: "demo-hash-staff",
+    passwordHash: "7777",
     role: "staff",
     active: true
   }
 ];
-
-export const DEMO_PASSWORDS: Record<string, string> = {
-  staff: "7777"
-};
 
 function nowIso() {
   return new Date().toISOString();
@@ -208,7 +210,9 @@ export function createInitialData(): JokerData {
 }
 
 export function normalizeData(data: JokerData): JokerData {
-  data.staff = seedStaff;
+  if (!Array.isArray(data.staff) || data.staff.length === 0) {
+    data.staff = seedStaff;
+  }
 
   if (!Array.isArray(data.tournamentTypes) || data.tournamentTypes.length === 0) {
     data.tournamentTypes = TOURNAMENT_TYPES;
@@ -360,12 +364,111 @@ export function verifyPin(data: JokerData, staffName: string, pin: string, _requ
     throw appError("JM-AUTH-001", "Staff member is not active or does not exist.");
   }
 
-  const expected = DEMO_PASSWORDS[staff.staffName];
-  if (!expected || expected !== pin) {
+  if (staff.passwordHash !== pin) {
     throw appError("JM-AUTH-002", "Password is incorrect.");
   }
 
   return staff;
+}
+
+export function getStaffList(data: JokerData) {
+  return data.staff.map((item) => ({
+    staffId: item.staffId,
+    staffName: item.staffName,
+    role: item.role,
+    active: item.active
+  }));
+}
+
+export function createStaff(data: JokerData, payload: CreateStaffPayload) {
+  const staff = verifyPin(data, payload.staffName, payload.pin);
+  const newStaffName = payload.newStaffName.trim();
+
+  if (!newStaffName) {
+    throw appError("JM-STAFF-001", "Staff name is required.");
+  }
+
+  if (!payload.newPin || payload.newPin.length < 4) {
+    throw appError("JM-STAFF-002", "PIN must be at least 4 characters.");
+  }
+
+  if (data.staff.some((item) => item.staffName.toLowerCase() === newStaffName.toLowerCase())) {
+    throw appError("JM-STAFF-003", "A staff member with that name already exists.");
+  }
+
+  const created: StaffMember = {
+    staffId: id("STAFF"),
+    staffName: newStaffName,
+    passwordHash: payload.newPin,
+    role: "staff",
+    active: true
+  };
+
+  data.staff.push(created);
+  data.auditLog.push(
+    audit(staff.staffName, staff.role, "CREATE_STAFF", created.staffId, "staffName", "", newStaffName, "Staff member added", "admin")
+  );
+
+  return getStaffList(data).find((item) => item.staffId === created.staffId);
+}
+
+export function setStaffPin(data: JokerData, payload: SetStaffPinPayload) {
+  const staff = verifyPin(data, payload.staffName, payload.pin);
+
+  if (!payload.newPin || payload.newPin.length < 4) {
+    throw appError("JM-STAFF-004", "PIN must be at least 4 characters.");
+  }
+
+  const target = data.staff.find(
+    (item) => item.staffName.toLowerCase() === payload.targetStaffName.trim().toLowerCase()
+  );
+
+  if (!target) {
+    throw appError("JM-STAFF-005", "Staff member was not found.");
+  }
+
+  target.passwordHash = payload.newPin;
+  data.auditLog.push(
+    audit(staff.staffName, staff.role, "SET_STAFF_PIN", target.staffId, "passwordHash", "", "", "PIN reset", "admin")
+  );
+
+  return getStaffList(data).find((item) => item.staffId === target.staffId);
+}
+
+export function setStaffActive(data: JokerData, payload: SetStaffActivePayload) {
+  const staff = verifyPin(data, payload.staffName, payload.pin);
+  const target = data.staff.find(
+    (item) => item.staffName.toLowerCase() === payload.targetStaffName.trim().toLowerCase()
+  );
+
+  if (!target) {
+    throw appError("JM-STAFF-005", "Staff member was not found.");
+  }
+
+  if (!payload.active) {
+    const otherActiveCount = data.staff.filter((item) => item.active && item.staffId !== target.staffId).length;
+    if (otherActiveCount === 0) {
+      throw appError("JM-STAFF-006", "At least one active staff member must remain.");
+    }
+  }
+
+  const oldValue = String(target.active);
+  target.active = payload.active;
+  data.auditLog.push(
+    audit(
+      staff.staffName,
+      staff.role,
+      "SET_STAFF_ACTIVE",
+      target.staffId,
+      "active",
+      oldValue,
+      String(target.active),
+      target.active ? "Staff reactivated" : "Staff deactivated",
+      "admin"
+    )
+  );
+
+  return getStaffList(data).find((item) => item.staffId === target.staffId);
 }
 
 export function createTournamentRun(data: JokerData, payload: CreateTournamentPayload) {

@@ -1,8 +1,11 @@
 import type {
   AdminAdjustmentPayload,
+  CreateStaffPayload,
   CreateTournamentPayload,
   EditRunPayload,
   JokerData,
+  SetStaffActivePayload,
+  SetStaffPinPayload,
   StaffSession,
   SubmitDrawPayload,
   UpsertTournamentTypePayload,
@@ -11,13 +14,17 @@ import type {
 import {
   applyAdminAdjustment,
   createInitialData,
+  createStaff,
   createTournamentRun,
   editRun,
   getCards,
   getDashboardData,
   getPendingRun,
+  getStaffList,
   getTvDisplayData,
   normalizeData,
+  setStaffActive,
+  setStaffPin,
   submitDrawResult,
   upsertTournamentType,
   verifyPin,
@@ -68,7 +75,7 @@ export function getStoredSession(): StaffSession | null {
   }
 
   const session = JSON.parse(raw) as StaffSession;
-  if (Date.parse(session.expiresAt) < Date.now() || session.staffName !== "staff") {
+  if (Date.parse(session.expiresAt) < Date.now()) {
     window.localStorage.removeItem(SESSION_KEY);
     return null;
   }
@@ -142,5 +149,17 @@ export const mockApi = {
   },
   async adminAdjustment(payload: AdminAdjustmentPayload) {
     return withData((data) => applyAdminAdjustment(data, payload));
+  },
+  async staffList() {
+    return withData((data) => getStaffList(data));
+  },
+  async createStaff(payload: CreateStaffPayload) {
+    return withData((data) => createStaff(data, payload));
+  },
+  async setStaffPin(payload: SetStaffPinPayload) {
+    return withData((data) => setStaffPin(data, payload));
+  },
+  async setStaffActive(payload: SetStaffActivePayload) {
+    return withData((data) => setStaffActive(data, payload));
   }
 };

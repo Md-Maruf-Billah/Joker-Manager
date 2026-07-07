@@ -1,8 +1,12 @@
 import type {
   AdminAdjustmentPayload,
+  CreateStaffPayload,
   CreateTournamentPayload,
   EditRunPayload,
   JokerData,
+  SetStaffActivePayload,
+  SetStaffPinPayload,
+  StaffListItem,
   StaffSession,
   SubmitDrawPayload,
   UpsertTournamentTypePayload,
@@ -162,6 +166,43 @@ export const api = {
     }
 
     return request("/api/admin/adjustment", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  staffList(): Promise<StaffListItem[]> {
+    if (!API_BASE_URL) {
+      return mockApi.staffList();
+    }
+
+    return request("/api/admin/staff");
+  },
+  createStaff(payload: CreateStaffPayload) {
+    if (!API_BASE_URL) {
+      return mockApi.createStaff(payload);
+    }
+
+    return request("/api/admin/staff/create", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  setStaffPin(payload: SetStaffPinPayload) {
+    if (!API_BASE_URL) {
+      return mockApi.setStaffPin(payload);
+    }
+
+    return request("/api/admin/staff/set-pin", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  setStaffActive(payload: SetStaffActivePayload) {
+    if (!API_BASE_URL) {
+      return mockApi.setStaffActive(payload);
+    }
+
+    return request("/api/admin/staff/set-active", {
       method: "POST",
       body: JSON.stringify(payload)
     });

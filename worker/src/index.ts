@@ -23,6 +23,10 @@ const routes: Record<string, RouteConfig> = {
   "/api/admin/adjustment": { methods: ["POST"] },
   "/api/admin/audit-log": { methods: ["GET"] },
   "/api/admin/export-backup": { methods: ["GET"] },
+  "/api/admin/staff": { methods: ["GET"] },
+  "/api/admin/staff/create": { methods: ["POST"] },
+  "/api/admin/staff/set-pin": { methods: ["POST"] },
+  "/api/admin/staff/set-active": { methods: ["POST"] },
   "/api/auth/verify-pin": { methods: ["POST"] }
 };
 

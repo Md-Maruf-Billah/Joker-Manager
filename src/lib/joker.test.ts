@@ -3,11 +3,15 @@ import type { JokerData } from "../types";
 import {
   STARTING_DECK_SIZE,
   applyAdminAdjustment,
+  createStaff,
   createTournamentRun,
   editRun,
   getPendingRun,
+  getStaffList,
   getTvDisplayData,
   getTvTier,
+  setStaffActive,
+  setStaffPin,
   submitDrawResult,
   verifyPin,
   voidRun
@@ -56,7 +60,7 @@ function freshData(): JokerData {
       }
     ],
     auditLog: [],
-    staff: [{ staffId: "STAFF_001", staffName: "staff", passwordHash: "unused-in-mock", role: "staff", active: true }]
+    staff: [{ staffId: "STAFF_001", staffName: "staff", passwordHash: "7777", role: "staff", active: true }]
   };
 }
 
@@ -432,5 +436,89 @@ describe("voidRun", () => {
     expect(() => voidRun(data, { runId: run.runId, staffName: "staff", pin: "7777", reason: "" })).toThrow(
       "[JM-VOID-003]"
     );
+  });
+});
+
+describe("createStaff", () => {
+  it("adds a new staff member who can then log in with their own PIN", () => {
+    const data = freshData();
+    createStaff(data, { newStaffName: "Sarah", newPin: "4321", staffName: "staff", pin: "7777" });
+
+    expect(getStaffList(data)).toHaveLength(2);
+    expect(verifyPin(data, "Sarah", "4321").staffName).toBe("Sarah");
+  });
+
+  it("rejects a duplicate staff name", () => {
+    const data = freshData();
+    createStaff(data, { newStaffName: "Sarah", newPin: "4321", staffName: "staff", pin: "7777" });
+    expect(() =>
+      createStaff(data, { newStaffName: "sarah", newPin: "9999", staffName: "staff", pin: "7777" })
+    ).toThrow("[JM-STAFF-003]");
+  });
+
+  it("rejects a PIN shorter than 4 characters", () => {
+    const data = freshData();
+    expect(() =>
+      createStaff(data, { newStaffName: "Sarah", newPin: "123", staffName: "staff", pin: "7777" })
+    ).toThrow("[JM-STAFF-002]");
+  });
+
+  it("writes an audit log entry", () => {
+    const data = freshData();
+    createStaff(data, { newStaffName: "Sarah", newPin: "4321", staffName: "staff", pin: "7777" });
+    expect(data.auditLog).toHaveLength(1);
+    expect(data.auditLog[0].action).toBe("CREATE_STAFF");
+  });
+});
+
+describe("setStaffPin", () => {
+  it("changes the target staff member's PIN", () => {
+    const data = freshData();
+    createStaff(data, { newStaffName: "Sarah", newPin: "4321", staffName: "staff", pin: "7777" });
+    setStaffPin(data, { targetStaffName: "Sarah", newPin: "5555", staffName: "staff", pin: "7777" });
+
+    expect(() => verifyPin(data, "Sarah", "4321")).toThrow("[JM-AUTH-002]");
+    expect(verifyPin(data, "Sarah", "5555").staffName).toBe("Sarah");
+  });
+
+  it("rejects a PIN shorter than 4 characters", () => {
+    const data = freshData();
+    expect(() =>
+      setStaffPin(data, { targetStaffName: "staff", newPin: "12", staffName: "staff", pin: "7777" })
+    ).toThrow("[JM-STAFF-004]");
+  });
+});
+
+describe("setStaffActive", () => {
+  it("deactivates a staff member so they can no longer log in", () => {
+    const data = freshData();
+    createStaff(data, { newStaffName: "Sarah", newPin: "4321", staffName: "staff", pin: "7777" });
+    setStaffActive(data, { targetStaffName: "Sarah", active: false, staffName: "staff", pin: "7777" });
+
+    expect(() => verifyPin(data, "Sarah", "4321")).toThrow("[JM-AUTH-001]");
+  });
+
+  it("blocks deactivating the last remaining active staff member", () => {
+    const data = freshData();
+    expect(() =>
+      setStaffActive(data, { targetStaffName: "staff", active: false, staffName: "staff", pin: "7777" })
+    ).toThrow("[JM-STAFF-006]");
+  });
+
+  it("allows deactivating one staff member when another stays active", () => {
+    const data = freshData();
+    createStaff(data, { newStaffName: "Sarah", newPin: "4321", staffName: "staff", pin: "7777" });
+    setStaffActive(data, { targetStaffName: "staff", active: false, staffName: "Sarah", pin: "4321" });
+
+    expect(() => verifyPin(data, "staff", "7777")).toThrow("[JM-AUTH-001]");
+  });
+
+  it("reactivates a deactivated staff member", () => {
+    const data = freshData();
+    createStaff(data, { newStaffName: "Sarah", newPin: "4321", staffName: "staff", pin: "7777" });
+    setStaffActive(data, { targetStaffName: "Sarah", active: false, staffName: "staff", pin: "7777" });
+    setStaffActive(data, { targetStaffName: "Sarah", active: true, staffName: "staff", pin: "7777" });
+
+    expect(verifyPin(data, "Sarah", "4321").staffName).toBe("Sarah");
   });
 });
