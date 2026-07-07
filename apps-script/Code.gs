@@ -104,6 +104,43 @@ function setupJokerJackpotDatabase() {
   appendRows_("Staff", [["STAFF_001", "staff", hashPassword_("7777"), "staff", true]]);
 }
 
+function resetStaffPassword() {
+  const ui = SpreadsheetApp.getUi();
+
+  const nameResponse = ui.prompt("Reset staff password", "Staff name to update:", ui.ButtonSet.OK_CANCEL);
+  if (nameResponse.getSelectedButton() !== ui.Button.OK) {
+    return;
+  }
+  const staffName = nameResponse.getResponseText().trim();
+
+  const passwordResponse = ui.prompt(
+    "Reset staff password",
+    "New password for " + staffName + ":",
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (passwordResponse.getSelectedButton() !== ui.Button.OK) {
+    return;
+  }
+  const newPassword = passwordResponse.getResponseText();
+
+  if (!staffName || !newPassword) {
+    ui.alert("Staff name and password are both required.");
+    return;
+  }
+
+  const staff = getObjects_("Staff").find(function (row) {
+    return String(row.StaffName).toLowerCase() === staffName.toLowerCase();
+  });
+
+  if (!staff) {
+    ui.alert('No staff member named "' + staffName + '" was found.');
+    return;
+  }
+
+  updateObjectByKey_("Staff", "StaffName", staff.StaffName, { PasswordHash: hashPassword_(newPassword) });
+  ui.alert("Password updated for " + staff.StaffName + ".");
+}
+
 function doPost(e) {
   try {
     const payload = JSON.parse(e.postData.contents || "{}");

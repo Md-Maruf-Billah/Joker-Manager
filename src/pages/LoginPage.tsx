@@ -10,9 +10,11 @@ import { errorMessage } from "../lib/errors";
 import { getStoredSession, storeSession } from "../lib/mockApi";
 import type { StaffSession } from "../types";
 
+const IS_MOCK_MODE = !import.meta.env.VITE_API_BASE_URL;
+
 export function LoginPage({ onLogin }: { onLogin: (session: StaffSession) => void }) {
-  const [staffName, setStaffName] = useState("staff");
-  const [pin, setPin] = useState("7777");
+  const [staffName, setStaffName] = useState(IS_MOCK_MODE ? "staff" : "");
+  const [pin, setPin] = useState(IS_MOCK_MODE ? "7777" : "");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const existing = getStoredSession();
@@ -68,9 +70,11 @@ export function LoginPage({ onLogin }: { onLogin: (session: StaffSession) => voi
               {loading ? "Checking..." : "Enter dashboard"}
             </Button>
           </form>
-          <div className="mt-5 rounded-md border border-paper/10 bg-paper/5 p-3 text-xs leading-5 text-muted">
-            Demo mode: staff uses 7777. Same account unlocks staff and admin tools.
-          </div>
+          {IS_MOCK_MODE ? (
+            <div className="mt-5 rounded-md border border-paper/10 bg-paper/5 p-3 text-xs leading-5 text-muted">
+              Demo mode: staff uses 7777. Same account unlocks staff and admin tools.
+            </div>
+          ) : null}
         </Panel>
       </div>
     </main>
