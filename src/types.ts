@@ -1,0 +1,190 @@
+export type Role = "staff" | "admin";
+
+export type TournamentType = {
+  id: string;
+  name: string;
+  shortName: string;
+  jackpotPerEntry: number;
+  active: boolean;
+};
+
+export type JackpotState = {
+  jackpotId: "JOKER_MAIN";
+  currentCycleId: string;
+  currentJackpot: number;
+  cardsRemaining: number;
+  lastCardPulled: string | null;
+  lastRunId: string | null;
+  lastUpdated: string;
+};
+
+export type RunStatus = "Awaiting Draw" | "Complete" | "Voided";
+
+export type TournamentRun = {
+  runId: string;
+  date: string;
+  timeCreated: string;
+  tournamentTypeId: string;
+  tournamentName: string;
+  entries: number;
+  jackpotPerEntry: number;
+  contribution: number;
+  openingJackpot: number;
+  availableJackpot: number;
+  winnerName: string | null;
+  cardPulled: string | null;
+  jokerHit: boolean;
+  jackpotPaid: number;
+  closingJackpot: number;
+  cardsBefore: number;
+  cardsAfter: number;
+  staffName: string;
+  status: RunStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RemovedCard = {
+  cycleId: string;
+  card: string;
+  runId: string;
+  removedDate: string;
+  playerName: string;
+};
+
+export type JackpotCycle = {
+  cycleId: string;
+  startDate: string;
+  endDate: string | null;
+  startingDeckSize: number;
+  totalContributions: number;
+  jackpotPaid: number;
+  winnerName: string | null;
+  winningRunId: string | null;
+  cardsRemainingWhenHit: number | null;
+  status: "Active" | "Closed";
+};
+
+export type AuditLogEntry = {
+  logId: string;
+  timestamp: string;
+  staffName: string;
+  role: Role;
+  action:
+    | "CREATE_RUN"
+    | "SUBMIT_DRAW"
+    | "EDIT_RUN"
+    | "MANUAL_ADJUSTMENT"
+    | "SAVE_TOURNAMENT_TYPE"
+    | "VERIFY_PASSWORD";
+  recordId: string;
+  fieldChanged: string;
+  oldValue: string;
+  newValue: string;
+  reason: string;
+  source: "dashboard" | "admin" | "api";
+};
+
+export type StaffMember = {
+  staffId: string;
+  staffName: string;
+  passwordHash: string;
+  role: Role;
+  active: boolean;
+};
+
+export type StaffSession = {
+  staffName: string;
+  role: Role;
+  expiresAt: string;
+};
+
+export type JokerData = {
+  settings: Record<string, string>;
+  tournamentTypes: TournamentType[];
+  jackpotState: JackpotState;
+  runs: TournamentRun[];
+  removedCards: RemovedCard[];
+  cycles: JackpotCycle[];
+  auditLog: AuditLogEntry[];
+  staff: StaffMember[];
+};
+
+export type CardView = {
+  code: string;
+  label: string;
+  rank: string;
+  suit: string | null;
+  suitName: string | null;
+  color: "red" | "black" | "joker";
+  removed: boolean;
+  removal?: RemovedCard;
+};
+
+export type TvTier = "fresh" | "building" | "hot" | "probability" | "danger";
+
+export type TvDisplayData = {
+  jackpot: number;
+  cardsRemaining: number;
+  tier: TvTier;
+  showLatestWinner: boolean;
+  showProbability: boolean;
+  latestWinner: {
+    name: string;
+    amount: number;
+  } | null;
+  copy: {
+    headline: string;
+    subline: string;
+    cta: string;
+  };
+  refreshedAt: string;
+};
+
+export type JackpotTrendPoint = {
+  date: string;
+  jackpot: number;
+};
+
+export type DashboardData = {
+  jackpotState: JackpotState;
+  pendingRun: TournamentRun | null;
+  latestRun: TournamentRun | null;
+  activeCycle: JackpotCycle;
+  recentAudit: AuditLogEntry[];
+  jackpotTrend: JackpotTrendPoint[];
+};
+
+export type CreateTournamentPayload = {
+  tournamentTypeId: string;
+  entries: number;
+  staffName: string;
+  pin: string;
+};
+
+export type SubmitDrawPayload = {
+  runId: string;
+  winnerName: string;
+  cardPulled: string;
+  staffName: string;
+  pin: string;
+  jokerConfirmed: boolean;
+};
+
+export type AdminAdjustmentPayload = {
+  adjustmentType: "add" | "subtract" | "set" | "reset_deck";
+  amount?: number;
+  reason: string;
+  staffName: string;
+  pin: string;
+};
+
+export type UpsertTournamentTypePayload = {
+  tournamentTypeId?: string;
+  name: string;
+  shortName: string;
+  jackpotPerEntry: number;
+  active: boolean;
+  staffName: string;
+  pin: string;
+};

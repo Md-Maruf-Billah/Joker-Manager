@@ -1,0 +1,10 @@
+name = "joker-manager-api"
+main = "src/index.ts"
+compatibility_date = "2026-07-07"
+
+[vars]
+ALLOWED_ORIGINS = "https://your-cloudflare-pages-domain.pages.dev,http://localhost:5173"
+
+# Set secrets with:
+# wrangler secret put APPS_SCRIPT_URL
+# wrangler secret put APPS_SCRIPT_TOKEN
