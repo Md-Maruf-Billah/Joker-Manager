@@ -31,6 +31,42 @@ const routes: Record<string, RouteConfig> = {
   "/api/auth/verify-pin": { methods: ["POST"] }
 };
 
+// Apps Script requests are inherently slow (typically multiple seconds).
+// Read-only GET routes are cached at the edge for a few seconds so repeat
+// visits and multiple staff loading the same page don't each pay that
+// latency. Cache keys are normalized to just the path+query (not origin) so
+// every client shares one entry. Every successful write purges all of these
+// so nobody ever sees stale data immediately after their own action.
+const CACHEABLE_GET_ROUTES = new Set([
+  "/api/dashboard",
+  "/api/tv",
+  "/api/tournament-types",
+  "/api/draw/pending",
+  "/api/cards",
+  "/api/history",
+  "/api/admin/audit-log",
+  "/api/admin/staff"
+]);
+const CACHE_TTL_SECONDS = 8;
+
+// @cloudflare/workers-types' CacheStorage type doesn't declare `default`
+// even though the Workers runtime provides it (same class of gap as the
+// URLSearchParams iterator issue elsewhere in this file).
+function edgeCache(): Cache {
+  return (caches as unknown as { default: Cache }).default;
+}
+
+function cacheKeyFor(pathname: string, search: string) {
+  return new Request(`https://joker-manager-cache.internal${pathname}${search}`);
+}
+
+async function purgeReadCache(ctx: ExecutionContext) {
+  const cache = edgeCache();
+  ctx.waitUntil(
+    Promise.all([...CACHEABLE_GET_ROUTES].map((path) => cache.delete(cacheKeyFor(path, ""))))
+  );
+}
+
 function allowedOrigins(env: Env) {
   return (env.ALLOWED_ORIGINS ?? "")
     .split(",")
@@ -76,7 +112,7 @@ async function readBody(request: Request) {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
@@ -101,6 +137,25 @@ export default {
       return json(request, env, { ok: false, error: "[JM-WORKER-003] Origin is not allowed." }, 403);
     }
 
+    const isCacheableGet = request.method === "GET" && CACHEABLE_GET_ROUTES.has(url.pathname);
+    const cache = edgeCache();
+    const cacheKey = cacheKeyFor(url.pathname, url.search);
+
+    if (isCacheableGet) {
+      const cached = await cache.match(cacheKey);
+      if (cached) {
+        const text = await cached.text();
+        return new Response(text, {
+          status: 200,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+            "x-cache": "hit",
+            ...corsHeaders(request, env)
+          }
+        });
+      }
+    }
+
     try {
       const body = await readBody(request);
       const query: Record<string, string> = {};
@@ -123,10 +178,28 @@ export default {
       });
 
       const text = await upstream.text();
+
+      if (isCacheableGet && upstream.ok) {
+        ctx.waitUntil(
+          cache.put(
+            cacheKey,
+            new Response(text, {
+              headers: {
+                "content-type": "application/json; charset=utf-8",
+                "cache-control": `max-age=${CACHE_TTL_SECONDS}`
+              }
+            })
+          )
+        );
+      } else if (request.method !== "GET" && upstream.ok) {
+        await purgeReadCache(ctx);
+      }
+
       return new Response(text, {
         status: upstream.ok ? 200 : upstream.status,
         headers: {
           "content-type": "application/json; charset=utf-8",
+          "x-cache": "miss",
           ...corsHeaders(request, env)
         }
       });
