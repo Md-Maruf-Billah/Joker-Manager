@@ -93,22 +93,22 @@ function SuitRail() {
 }
 
 export function TvDisplayPage() {
-  const [data, setData] = useState<TvDisplayData | null>(null);
+  const [data, setData] = useState<TvDisplayData | null>(() => api.cachedTv());
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
   const isCleanDisplay = new URLSearchParams(window.location.search).get("display") === "clean";
 
   useEffect(() => {
     let alive = true;
 
-    async function load() {
-      const next = (await api.tv()) as TvDisplayData;
+    async function load(options: { bypassCache?: boolean } = {}) {
+      const next = (await api.tv(options)) as TvDisplayData;
       if (alive) {
         setData(next);
       }
     }
 
-    void load();
-    const interval = window.setInterval(() => void load(), 30_000);
+    void load({ bypassCache: Boolean(data) }).catch(() => undefined);
+    const interval = window.setInterval(() => void load().catch(() => undefined), 30_000);
 
     return () => {
       alive = false;

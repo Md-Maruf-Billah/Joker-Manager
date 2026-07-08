@@ -105,21 +105,25 @@ function JackpotTrendChart({ points }: { points: JackpotTrendPoint[] }) {
 }
 
 export function DashboardPage() {
-  const [data, setData] = useState<DashboardData | null>(null);
+  const [data, setData] = useState<DashboardData | null>(() => api.cachedDashboard());
   const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
   const [timelineDays, setTimelineDays] = useState(30);
 
-  async function load() {
+  async function load(options: { bypassCache?: boolean } = {}) {
     setError("");
+    setRefreshing(Boolean(data));
     try {
-      setData((await api.dashboard()) as DashboardData);
+      setData((await api.dashboard(options)) as DashboardData);
     } catch (err) {
       setError(errorMessage(err, "JM-DASH-001", "Could not load dashboard."));
+    } finally {
+      setRefreshing(false);
     }
   }
 
   useEffect(() => {
-    void load();
+    void load({ bypassCache: Boolean(data) });
   }, []);
 
   const trendPoints = useMemo(() => {
@@ -166,9 +170,9 @@ export function DashboardPage() {
               <Monitor className="h-4 w-4" />
               Clean TV
             </ButtonLink>
-            <Button variant="secondary" onClick={load}>
-              <RefreshCcw className="h-4 w-4" />
-              Refresh
+            <Button variant="secondary" onClick={() => void load({ bypassCache: true })}>
+              <RefreshCcw className={refreshing ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+              {refreshing ? "Refreshing..." : "Refresh"}
             </Button>
           </div>
         }

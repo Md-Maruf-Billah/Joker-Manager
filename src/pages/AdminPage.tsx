@@ -18,9 +18,10 @@ type StaffRowMode = { staffId: string; kind: "pin" | "toggle" } | null;
 
 export function AdminPage() {
   const session = useSession();
-  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [audit, setAudit] = useState<AuditLogEntry[]>([]);
-  const [tournamentTypes, setTournamentTypes] = useState<TournamentType[]>([]);
+  const [initialBootstrap] = useState(() => api.cachedAdminBootstrap());
+  const [dashboard, setDashboard] = useState<DashboardData | null>(() => initialBootstrap?.dashboard ?? null);
+  const [audit, setAudit] = useState<AuditLogEntry[]>(() => initialBootstrap?.audit ?? []);
+  const [tournamentTypes, setTournamentTypes] = useState<TournamentType[]>(() => initialBootstrap?.tournamentTypes ?? []);
   const [selectedTypeId, setSelectedTypeId] = useState("__new");
   const [typeName, setTypeName] = useState("");
   const [typeShortName, setTypeShortName] = useState("");
@@ -37,7 +38,7 @@ export function AdminPage() {
   const [loading, setLoading] = useState(false);
   const showDemoTools = import.meta.env.DEV && !import.meta.env.VITE_API_BASE_URL;
 
-  const [staffList, setStaffList] = useState<StaffListItem[]>([]);
+  const [staffList, setStaffList] = useState<StaffListItem[]>(() => initialBootstrap?.staffList ?? []);
   const [newStaffName, setNewStaffName] = useState("");
   const [newStaffPin, setNewStaffPin] = useState("");
   const [addStaffPassword, setAddStaffPassword] = useState("");
@@ -48,21 +49,18 @@ export function AdminPage() {
   const [staffMessage, setStaffMessage] = useState("");
   const [staffLoading, setStaffLoading] = useState(false);
 
-  async function load() {
-    const [nextDashboard, nextAudit, nextTypes, nextStaff] = await Promise.all([
-      api.dashboard(),
-      api.auditLog(),
-      api.tournamentTypes(true),
-      api.staffList()
-    ]);
-    setDashboard(nextDashboard as DashboardData);
-    setAudit(nextAudit as AuditLogEntry[]);
-    setTournamentTypes(nextTypes as TournamentType[]);
-    setStaffList(nextStaff);
+  async function load(options: { bypassCache?: boolean } = {}) {
+    const bootstrap = await api.adminBootstrap(options);
+    setDashboard(bootstrap.dashboard);
+    setAudit(bootstrap.audit);
+    setTournamentTypes(bootstrap.tournamentTypes);
+    setStaffList(bootstrap.staffList);
   }
 
   useEffect(() => {
-    void load().catch((err) => setError(errorMessage(err, "JM-ADMIN-001", "Could not load admin.")));
+    void load({ bypassCache: Boolean(initialBootstrap) }).catch((err) =>
+      setError(errorMessage(err, "JM-ADMIN-001", "Could not load admin."))
+    );
   }, []);
 
   function resetTypeForm() {
@@ -110,7 +108,7 @@ export function AdminPage() {
       });
       setMessage("Tournament type saved. Add Tournament dropdown updated.");
       resetTypeForm();
-      await load();
+      await load({ bypassCache: true });
     } catch (err) {
       setError(errorMessage(err, "JM-TYPE-900", "Tournament type save failed."));
     } finally {
@@ -142,7 +140,7 @@ export function AdminPage() {
   function resetDemo() {
     resetMockData();
     setMessage("Demo data reset.");
-    void load();
+    void load({ bypassCache: true });
   }
 
   async function submit(event: FormEvent) {
@@ -170,7 +168,7 @@ export function AdminPage() {
       setResetConfirm("");
       setReason("");
       setPin("");
-      await load();
+      await load({ bypassCache: true });
     } catch (err) {
       setError(errorMessage(err, "JM-ADJ-900", "Adjustment failed."));
     } finally {
@@ -195,7 +193,7 @@ export function AdminPage() {
       setNewStaffName("");
       setNewStaffPin("");
       setAddStaffPassword("");
-      await load();
+      await load({ bypassCache: true });
     } catch (err) {
       setStaffError(errorMessage(err, "JM-STAFF-900", "Could not add staff member."));
     } finally {
@@ -232,7 +230,7 @@ export function AdminPage() {
       });
       setStaffMessage(`PIN updated for ${member.staffName}.`);
       closeStaffRow();
-      await load();
+      await load({ bypassCache: true });
     } catch (err) {
       setStaffError(errorMessage(err, "JM-STAFF-901", "Could not reset PIN."));
     } finally {
@@ -255,7 +253,7 @@ export function AdminPage() {
       });
       setStaffMessage(`${member.staffName} ${member.active ? "deactivated" : "reactivated"}.`);
       closeStaffRow();
-      await load();
+      await load({ bypassCache: true });
     } catch (err) {
       setStaffError(errorMessage(err, "JM-STAFF-902", "Could not update staff status."));
     } finally {

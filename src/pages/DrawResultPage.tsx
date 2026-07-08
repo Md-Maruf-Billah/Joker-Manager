@@ -29,9 +29,9 @@ export function DrawResultPage() {
   const [loaded, setLoaded] = useState(false);
 
   async function load() {
-    const [run, loadedCards] = await Promise.all([api.pendingDraw(), api.cards()]);
-    setPendingRun(run as TournamentRun | null);
-    setCards(loadedCards as CardView[]);
+    const bootstrap = await api.drawBootstrap();
+    setPendingRun(bootstrap.pendingRun);
+    setCards(bootstrap.cards);
     setLoaded(true);
   }
 

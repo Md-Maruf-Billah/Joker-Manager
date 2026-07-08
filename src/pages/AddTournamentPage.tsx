@@ -16,9 +16,10 @@ import type { DashboardData, TournamentType } from "../types";
 export function AddTournamentPage() {
   const session = useSession();
   const navigate = useNavigate();
-  const [types, setTypes] = useState<TournamentType[]>([]);
-  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [tournamentTypeId, setTournamentTypeId] = useState("");
+  const [initialBootstrap] = useState(() => api.cachedAddTournamentBootstrap());
+  const [types, setTypes] = useState<TournamentType[]>(() => initialBootstrap?.tournamentTypes ?? []);
+  const [dashboard, setDashboard] = useState<DashboardData | null>(() => initialBootstrap?.dashboard ?? null);
+  const [tournamentTypeId, setTournamentTypeId] = useState(() => initialBootstrap?.tournamentTypes[0]?.id ?? "");
   const [entries, setEntries] = useState("");
   const [pin, setPin] = useState("");
   const [message, setMessage] = useState("");
@@ -27,10 +28,10 @@ export function AddTournamentPage() {
 
   useEffect(() => {
     async function load() {
-      const [loadedTypes, loadedDashboard] = await Promise.all([api.tournamentTypes(), api.dashboard()]);
-      setTypes(loadedTypes as TournamentType[]);
-      setDashboard(loadedDashboard as DashboardData);
-      setTournamentTypeId((loadedTypes as TournamentType[])[0]?.id ?? "");
+      const bootstrap = await api.addTournamentBootstrap({ bypassCache: Boolean(initialBootstrap) });
+      setTypes(bootstrap.tournamentTypes);
+      setDashboard(bootstrap.dashboard);
+      setTournamentTypeId((current) => current || (bootstrap.tournamentTypes[0]?.id ?? ""));
     }
 
     void load().catch((err) => setError(errorMessage(err, "JM-RUN-900", "Could not load form.")));

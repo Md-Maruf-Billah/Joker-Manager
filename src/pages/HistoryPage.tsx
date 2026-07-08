@@ -19,8 +19,9 @@ type RowMode = { runId: string; kind: "edit" | "void" } | null;
 
 export function HistoryPage() {
   const session = useSession();
-  const [runs, setRuns] = useState<TournamentRun[]>([]);
-  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [initialBootstrap] = useState(() => api.cachedHistoryBootstrap());
+  const [runs, setRuns] = useState<TournamentRun[]>(() => initialBootstrap?.runs ?? []);
+  const [dashboard, setDashboard] = useState<DashboardData | null>(() => initialBootstrap?.dashboard ?? null);
   const [typeFilter, setTypeFilter] = useState("all");
   const [jokerFilter, setJokerFilter] = useState("all");
   const [error, setError] = useState("");
@@ -33,14 +34,16 @@ export function HistoryPage() {
   const [rowMessage, setRowMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function load() {
-    const [items, dashboardData] = await Promise.all([api.history(), api.dashboard()]);
-    setRuns(items as TournamentRun[]);
-    setDashboard(dashboardData as DashboardData);
+  async function load(options: { bypassCache?: boolean } = {}) {
+    const bootstrap = await api.historyBootstrap(options);
+    setRuns(bootstrap.runs);
+    setDashboard(bootstrap.dashboard);
   }
 
   useEffect(() => {
-    void load().catch((err) => setError(errorMessage(err, "JM-HIST-001", "Could not load history.")));
+    void load({ bypassCache: Boolean(initialBootstrap) }).catch((err) =>
+      setError(errorMessage(err, "JM-HIST-001", "Could not load history."))
+    );
   }, []);
 
   const filtered = useMemo(() => {
@@ -99,7 +102,7 @@ export function HistoryPage() {
         entries: run.status === "Awaiting Draw" ? Number(entries) : undefined
       });
       setRowMessage("Run updated and logged.");
-      await load();
+      await load({ bypassCache: true });
       closeRow();
     } catch (err) {
       setRowError(errorMessage(err, "JM-EDIT-900", "Could not save edit."));
@@ -121,7 +124,7 @@ export function HistoryPage() {
         reason
       });
       setRowMessage("Run voided and logged.");
-      await load();
+      await load({ bypassCache: true });
       closeRow();
     } catch (err) {
       setRowError(errorMessage(err, "JM-VOID-900", "Could not void run."));

@@ -166,6 +166,33 @@ export type DashboardData = {
   jackpotTrend: JackpotTrendPoint[];
 };
 
+export type LoginBootstrapData = {
+  session: StaffSession;
+  dashboard: DashboardData;
+};
+
+export type AddTournamentBootstrapData = {
+  tournamentTypes: TournamentType[];
+  dashboard: DashboardData;
+};
+
+export type DrawBootstrapData = {
+  pendingRun: TournamentRun | null;
+  cards: CardView[];
+};
+
+export type HistoryBootstrapData = {
+  runs: TournamentRun[];
+  dashboard: DashboardData;
+};
+
+export type AdminBootstrapData = {
+  dashboard: DashboardData;
+  audit: AuditLogEntry[];
+  tournamentTypes: TournamentType[];
+  staffList: StaffListItem[];
+};
+
 export type CreateTournamentPayload = {
   tournamentTypeId: string;
   entries: number;

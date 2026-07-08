@@ -29,7 +29,7 @@ export function LoginPage({ onLogin }: { onLogin: (session: StaffSession) => voi
     setLoading(true);
 
     try {
-      const session = await api.verifyPin(staffName, pin);
+      const { session } = await api.loginBootstrap(staffName, pin);
       storeSession(session);
       onLogin(session);
     } catch (err) {

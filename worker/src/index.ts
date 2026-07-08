@@ -10,9 +10,14 @@ type RouteConfig = {
 };
 
 const routes: Record<string, RouteConfig> = {
+  "/api/auth/login-bootstrap": { methods: ["POST"] },
   "/api/dashboard": { methods: ["GET"] },
   "/api/tv": { methods: ["GET"] },
   "/api/tournament-types": { methods: ["GET"] },
+  "/api/bootstrap/add-tournament": { methods: ["GET"] },
+  "/api/bootstrap/draw": { methods: ["GET"] },
+  "/api/bootstrap/history": { methods: ["GET"] },
+  "/api/bootstrap/admin": { methods: ["GET"] },
   "/api/tournament-types/save": { methods: ["POST"] },
   "/api/tournament/create": { methods: ["POST"] },
   "/api/draw/pending": { methods: ["GET"] },
@@ -32,22 +37,62 @@ const routes: Record<string, RouteConfig> = {
 };
 
 // Apps Script requests are inherently slow (typically multiple seconds).
-// Read-only GET routes are cached at the edge for a few seconds so repeat
-// visits and multiple staff loading the same page don't each pay that
-// latency. Cache keys are normalized to just the path+query (not origin) so
-// every client shares one entry. Every successful write purges all of these
-// so nobody ever sees stale data immediately after their own action.
+// Read-only GET routes are cached at the edge and kept as a stale fallback
+// after the short freshness window. That lets screens render immediately
+// while the Worker refreshes slow Sheet reads in the background. Cache keys
+// are normalized to just the path+query (not origin) so every client shares
+// one entry. Every successful write purges the read cache before returning,
+// then warms the routes staff and TV screens are most likely to need next.
 const CACHEABLE_GET_ROUTES = new Set([
   "/api/dashboard",
   "/api/tv",
   "/api/tournament-types",
+  "/api/bootstrap/add-tournament",
+  "/api/bootstrap/draw",
+  "/api/bootstrap/history",
+  "/api/bootstrap/admin",
   "/api/draw/pending",
   "/api/cards",
   "/api/history",
   "/api/admin/audit-log",
   "/api/admin/staff"
 ]);
-const CACHE_TTL_SECONDS = 8;
+const MUTATING_ROUTES = new Set([
+  "/api/tournament-types/save",
+  "/api/tournament/create",
+  "/api/draw/submit",
+  "/api/run/edit",
+  "/api/run/void",
+  "/api/admin/adjustment",
+  "/api/admin/staff/create",
+  "/api/admin/staff/set-pin",
+  "/api/admin/staff/set-active"
+]);
+const CACHE_FRESH_SECONDS = 8;
+const CACHE_RETAIN_SECONDS = 6 * 60 * 60;
+const REFRESH_PARAM = "__jm_refresh";
+
+const PURGE_CACHE_KEYS = [
+  ["/api/dashboard", ""],
+  ["/api/tv", ""],
+  ["/api/tournament-types", ""],
+  ["/api/tournament-types", "?includeInactive=true"],
+  ["/api/bootstrap/add-tournament", ""],
+  ["/api/bootstrap/draw", ""],
+  ["/api/bootstrap/history", ""],
+  ["/api/bootstrap/admin", ""],
+  ["/api/draw/pending", ""],
+  ["/api/cards", ""],
+  ["/api/history", ""],
+  ["/api/admin/audit-log", ""],
+  ["/api/admin/staff", ""]
+] as const;
+
+const WARM_AFTER_WRITE_KEYS = [
+  ["/api/dashboard", ""],
+  ["/api/tv", ""],
+  ["/api/bootstrap/draw", ""]
+] as const;
 
 // @cloudflare/workers-types' CacheStorage type doesn't declare `default`
 // even though the Workers runtime provides it (same class of gap as the
@@ -62,8 +107,65 @@ function cacheKeyFor(pathname: string, search: string) {
 
 async function purgeReadCache(ctx: ExecutionContext) {
   const cache = edgeCache();
-  ctx.waitUntil(
-    Promise.all([...CACHEABLE_GET_ROUTES].map((path) => cache.delete(cacheKeyFor(path, ""))))
+  const deletion = Promise.all(PURGE_CACHE_KEYS.map(([path, search]) => cache.delete(cacheKeyFor(path, search))));
+  ctx.waitUntil(deletion);
+  await deletion;
+}
+
+function queryFromUrl(url: URL) {
+  const query: Record<string, string> = {};
+  url.searchParams.forEach((value, key) => {
+    query[key] = value;
+  });
+  return query;
+}
+
+async function fetchUpstream(env: Env, pathname: string, method: string, query: Record<string, string>, body: unknown) {
+  const upstream = await fetch(env.APPS_SCRIPT_URL, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      token: env.APPS_SCRIPT_TOKEN,
+      path: pathname,
+      method,
+      query,
+      body
+    })
+  });
+
+  return {
+    ok: upstream.ok,
+    status: upstream.status,
+    text: await upstream.text()
+  };
+}
+
+function cachedResponse(text: string) {
+  return new Response(text, {
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": `max-age=${CACHE_RETAIN_SECONDS}`,
+      "x-jm-cached-at": String(Date.now())
+    }
+  });
+}
+
+async function refreshReadCache(env: Env, pathname: string, search: string) {
+  const url = new URL(`https://joker-manager-cache.internal${pathname}${search}`);
+  const upstream = await fetchUpstream(env, pathname, "GET", queryFromUrl(url), null);
+
+  if (upstream.ok) {
+    await edgeCache().put(cacheKeyFor(pathname, search), cachedResponse(upstream.text));
+  }
+}
+
+async function warmReadCache(env: Env) {
+  await Promise.all(
+    WARM_AFTER_WRITE_KEYS.map(([path, search]) =>
+      refreshReadCache(env, path, search).catch(() => undefined)
+    )
   );
 }
 
@@ -121,6 +223,8 @@ export default {
     }
 
     const url = new URL(request.url);
+    const forceRefresh = url.searchParams.get(REFRESH_PARAM) === "1";
+    url.searchParams.delete(REFRESH_PARAM);
     const route = routes[url.pathname];
 
     if (!route) {
@@ -141,15 +245,24 @@ export default {
     const cache = edgeCache();
     const cacheKey = cacheKeyFor(url.pathname, url.search);
 
-    if (isCacheableGet) {
+    if (isCacheableGet && !forceRefresh) {
       const cached = await cache.match(cacheKey);
       if (cached) {
         const text = await cached.text();
+        const cachedAt = Number(cached.headers.get("x-jm-cached-at") ?? "0");
+        const ageSeconds = cachedAt ? Math.max(0, Math.round((Date.now() - cachedAt) / 1000)) : 0;
+        const cacheState = ageSeconds > CACHE_FRESH_SECONDS ? "stale" : "hit";
+
+        if (cacheState === "stale") {
+          ctx.waitUntil(refreshReadCache(env, url.pathname, url.search));
+        }
+
         return new Response(text, {
           status: 200,
           headers: {
             "content-type": "application/json; charset=utf-8",
-            "x-cache": "hit",
+            "x-cache": cacheState,
+            "x-cache-age": String(ageSeconds),
             ...corsHeaders(request, env)
           }
         });
@@ -158,48 +271,25 @@ export default {
 
     try {
       const body = await readBody(request);
-      const query: Record<string, string> = {};
-      url.searchParams.forEach((value, key) => {
-        query[key] = value;
-      });
-
-      const upstream = await fetch(env.APPS_SCRIPT_URL, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          token: env.APPS_SCRIPT_TOKEN,
-          path: url.pathname,
-          method: request.method,
-          query,
-          body
-        })
-      });
-
-      const text = await upstream.text();
+      const upstream = await fetchUpstream(env, url.pathname, request.method, queryFromUrl(url), body);
 
       if (isCacheableGet && upstream.ok) {
         ctx.waitUntil(
           cache.put(
             cacheKey,
-            new Response(text, {
-              headers: {
-                "content-type": "application/json; charset=utf-8",
-                "cache-control": `max-age=${CACHE_TTL_SECONDS}`
-              }
-            })
+            cachedResponse(upstream.text)
           )
         );
-      } else if (request.method !== "GET" && upstream.ok) {
+      } else if (MUTATING_ROUTES.has(url.pathname) && upstream.ok) {
         await purgeReadCache(ctx);
+        ctx.waitUntil(warmReadCache(env));
       }
 
-      return new Response(text, {
+      return new Response(upstream.text, {
         status: upstream.ok ? 200 : upstream.status,
         headers: {
           "content-type": "application/json; charset=utf-8",
-          "x-cache": "miss",
+          "x-cache": forceRefresh ? "refresh" : "miss",
           ...corsHeaders(request, env)
         }
       });

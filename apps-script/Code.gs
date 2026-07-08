@@ -185,6 +185,8 @@ function handleRequest_(payload) {
   const body = payload.body || {};
 
   switch (payload.path) {
+    case "/api/auth/login-bootstrap":
+      return loginBootstrapRoute_(body);
     case "/api/auth/verify-pin":
       return verifyPinRoute_(body);
     case "/api/dashboard":
@@ -193,6 +195,14 @@ function handleRequest_(payload) {
       return getTvDisplayData_();
     case "/api/tournament-types":
       return getTournamentTypes_(String((payload.query || {}).includeInactive) === "true");
+    case "/api/bootstrap/add-tournament":
+      return getAddTournamentBootstrap_();
+    case "/api/bootstrap/draw":
+      return getDrawBootstrap_();
+    case "/api/bootstrap/history":
+      return getHistoryBootstrap_();
+    case "/api/bootstrap/admin":
+      return getAdminBootstrap_();
     case "/api/tournament-types/save":
       return withLock_(function () {
         return saveTournamentType_(body);
@@ -255,19 +265,57 @@ function verifyPinRoute_(body) {
   };
 }
 
+function loginBootstrapRoute_(body) {
+  return {
+    session: verifyPinRoute_(body),
+    dashboard: getDashboardData_()
+  };
+}
+
+function getAddTournamentBootstrap_() {
+  return {
+    tournamentTypes: getTournamentTypes_(false),
+    dashboard: getDashboardData_()
+  };
+}
+
+function getDrawBootstrap_() {
+  return {
+    pendingRun: getPendingDraw_(),
+    cards: getCardViews_()
+  };
+}
+
+function getHistoryBootstrap_() {
+  return {
+    runs: getHistory_(),
+    dashboard: getDashboardData_()
+  };
+}
+
+function getAdminBootstrap_() {
+  return {
+    dashboard: getDashboardData_(),
+    audit: getAuditLog_(),
+    tournamentTypes: getTournamentTypes_(true),
+    staffList: getStaffList_()
+  };
+}
+
 function getDashboardData_() {
   const state = getCurrentState_();
   const activeCycle = getActiveCycle_();
   const runs = getObjects_("Tournament_Runs").map(runFromRow_);
+  const sortedRuns = runs.slice().sort(function (a, b) { return b.updatedAt.localeCompare(a.updatedAt); });
   const audit = getAuditLog_();
 
   return {
     jackpotState: state,
     pendingRun: runs.find(function (run) { return run.status === "Awaiting Draw"; }) || null,
-    latestRun: runs.sort(function (a, b) { return b.updatedAt.localeCompare(a.updatedAt); })[0] || null,
+    latestRun: sortedRuns[0] || null,
     activeCycle: activeCycle,
     recentAudit: audit.slice(0, 5),
-    jackpotTrend: getJackpotTrend_()
+    jackpotTrend: getJackpotTrend_(runs, state)
   };
 }
 
@@ -655,18 +703,18 @@ function exportBackup_() {
   return backup;
 }
 
-function getJackpotTrend_() {
+function getJackpotTrend_(runs, state) {
   const daily = {};
-  getObjects_("Tournament_Runs")
-    .map(runFromRow_)
+  const sourceRuns = runs || getObjects_("Tournament_Runs").map(runFromRow_);
+  sourceRuns
     .filter(function (run) { return run.status === "Complete"; })
     .sort(function (a, b) { return a.updatedAt.localeCompare(b.updatedAt); })
     .forEach(function (run) {
       daily[run.updatedAt.slice(0, 10)] = run.closingJackpot;
     });
 
-  const state = getCurrentState_();
-  daily[new Date().toISOString().slice(0, 10)] = state.currentJackpot;
+  const currentState = state || getCurrentState_();
+  daily[new Date().toISOString().slice(0, 10)] = currentState.currentJackpot;
 
   return Object.keys(daily)
     .sort()

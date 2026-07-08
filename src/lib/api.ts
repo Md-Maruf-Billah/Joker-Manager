@@ -1,14 +1,21 @@
 import type {
+  AddTournamentBootstrapData,
   AdminAdjustmentPayload,
+  AdminBootstrapData,
   CreateStaffPayload,
   CreateTournamentPayload,
+  DashboardData,
+  DrawBootstrapData,
   EditRunPayload,
+  HistoryBootstrapData,
   JokerData,
+  LoginBootstrapData,
   SetStaffActivePayload,
   SetStaffPinPayload,
   StaffListItem,
   StaffSession,
   SubmitDrawPayload,
+  TvDisplayData,
   UpsertTournamentTypePayload,
   VoidRunPayload
 } from "../types";
@@ -16,13 +23,105 @@ import { appError } from "./errors";
 import { mockApi } from "./mockApi";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string | undefined;
+const API_CACHE_PREFIX = "joker-manager-api-cache:";
+const REFRESH_PARAM = "__jm_refresh";
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+const MUTATING_PATHS = new Set([
+  "/api/tournament-types/save",
+  "/api/tournament/create",
+  "/api/draw/submit",
+  "/api/run/edit",
+  "/api/run/void",
+  "/api/admin/adjustment",
+  "/api/admin/staff/create",
+  "/api/admin/staff/set-pin",
+  "/api/admin/staff/set-active"
+]);
+
+const inFlightReads = new Map<string, Promise<unknown>>();
+
+type RequestOptions = {
+  bypassCache?: boolean;
+};
+
+type CachedSnapshot<T> = {
+  data: T;
+  storedAt: string;
+};
+
+function localStorageOrNull() {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function cachedKey(path: string) {
+  return `${API_CACHE_PREFIX}${path}`;
+}
+
+function readCachedData<T>(path: string): T | null {
+  const storage = localStorageOrNull();
+  const raw = storage?.getItem(cachedKey(path));
+
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    return (JSON.parse(raw) as CachedSnapshot<T>).data;
+  } catch {
+    storage?.removeItem(cachedKey(path));
+    return null;
+  }
+}
+
+function rememberCachedData<T>(path: string, data: T) {
+  const storage = localStorageOrNull();
+  try {
+    storage?.setItem(
+      cachedKey(path),
+      JSON.stringify({
+        data,
+        storedAt: new Date().toISOString()
+      } satisfies CachedSnapshot<T>)
+    );
+  } catch {
+    // Cache failure should never block the operational workflow.
+  }
+}
+
+function clearCachedReads() {
+  const storage = localStorageOrNull();
+  if (!storage) {
+    return;
+  }
+
+  for (let index = storage.length - 1; index >= 0; index -= 1) {
+    const key = storage.key(index);
+    if (key?.startsWith(API_CACHE_PREFIX)) {
+      storage.removeItem(key);
+    }
+  }
+}
+
+function withRefreshParam(path: string) {
+  const [base, query = ""] = path.split("?");
+  const params = new URLSearchParams(query);
+  params.set(REFRESH_PARAM, "1");
+  const nextQuery = params.toString();
+  return nextQuery ? `${base}?${nextQuery}` : base;
+}
+
+async function performRequest<T>(path: string, init?: RequestInit, options: RequestOptions = {}): Promise<T> {
   if (!API_BASE_URL) {
     throw appError("JM-API-001", "API base URL is not configured.");
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const requestPath = method === "GET" && options.bypassCache ? withRefreshParam(path) : path;
+  const response = await fetch(`${API_BASE_URL}${requestPath}`, {
     ...init,
     headers: {
       "content-type": "application/json",
@@ -40,10 +139,59 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw appError("JM-API-002", payload.error ?? "Request failed.");
   }
 
-  return payload.data as T;
+  const data = payload.data as T;
+
+  if (method === "GET") {
+    rememberCachedData(path, data);
+  } else if (MUTATING_PATHS.has(path)) {
+    clearCachedReads();
+  }
+
+  return data;
+}
+
+async function request<T>(path: string, init?: RequestInit, options: RequestOptions = {}): Promise<T> {
+  const method = (init?.method ?? "GET").toUpperCase();
+
+  if (method !== "GET") {
+    return performRequest<T>(path, init, options);
+  }
+
+  const readKey = `${path}:${options.bypassCache ? "refresh" : "cache"}`;
+  const existing = inFlightReads.get(readKey) as Promise<T> | undefined;
+  if (existing) {
+    return existing;
+  }
+
+  const promise = performRequest<T>(path, init, options);
+  inFlightReads.set(readKey, promise);
+
+  try {
+    return await promise;
+  } finally {
+    inFlightReads.delete(readKey);
+  }
 }
 
 export const api = {
+  cachedDashboard(): DashboardData | null {
+    return readCachedData<DashboardData>("/api/dashboard");
+  },
+  cachedTv(): TvDisplayData | null {
+    return readCachedData<TvDisplayData>("/api/tv");
+  },
+  cachedAddTournamentBootstrap(): AddTournamentBootstrapData | null {
+    return readCachedData<AddTournamentBootstrapData>("/api/bootstrap/add-tournament");
+  },
+  cachedDrawBootstrap(): DrawBootstrapData | null {
+    return readCachedData<DrawBootstrapData>("/api/bootstrap/draw");
+  },
+  cachedHistoryBootstrap(): HistoryBootstrapData | null {
+    return readCachedData<HistoryBootstrapData>("/api/bootstrap/history");
+  },
+  cachedAdminBootstrap(): AdminBootstrapData | null {
+    return readCachedData<AdminBootstrapData>("/api/bootstrap/admin");
+  },
   verifyPin(staffName: string, pin: string): Promise<StaffSession> {
     if (!API_BASE_URL) {
       return mockApi.verifyPin(staffName, pin);
@@ -54,19 +202,69 @@ export const api = {
       body: JSON.stringify({ staffName, pin })
     });
   },
-  dashboard() {
+  async loginBootstrap(staffName: string, pin: string): Promise<LoginBootstrapData> {
+    if (!API_BASE_URL) {
+      const [session, dashboard] = await Promise.all([mockApi.verifyPin(staffName, pin), mockApi.dashboard()]);
+      return { session, dashboard };
+    }
+
+    const data = await request<LoginBootstrapData>("/api/auth/login-bootstrap", {
+      method: "POST",
+      body: JSON.stringify({ staffName, pin })
+    });
+    rememberCachedData("/api/dashboard", data.dashboard);
+    return data;
+  },
+  dashboard(options?: RequestOptions) {
     if (!API_BASE_URL) {
       return mockApi.dashboard();
     }
 
-    return request("/api/dashboard");
+    return request("/api/dashboard", undefined, options);
   },
-  tournamentTypes(includeInactive = false) {
+  tournamentTypes(includeInactive = false, options?: RequestOptions) {
     if (!API_BASE_URL) {
       return mockApi.tournamentTypes(includeInactive);
     }
 
-    return request(`/api/tournament-types${includeInactive ? "?includeInactive=true" : ""}`);
+    return request(`/api/tournament-types${includeInactive ? "?includeInactive=true" : ""}`, undefined, options);
+  },
+  async addTournamentBootstrap(options?: RequestOptions): Promise<AddTournamentBootstrapData> {
+    if (!API_BASE_URL) {
+      const [tournamentTypes, dashboard] = await Promise.all([mockApi.tournamentTypes(), mockApi.dashboard()]);
+      return { tournamentTypes, dashboard };
+    }
+
+    return request("/api/bootstrap/add-tournament", undefined, options);
+  },
+  async drawBootstrap(options?: RequestOptions): Promise<DrawBootstrapData> {
+    if (!API_BASE_URL) {
+      const [pendingRun, cards] = await Promise.all([mockApi.pendingDraw(), mockApi.cards()]);
+      return { pendingRun, cards };
+    }
+
+    return request("/api/bootstrap/draw", undefined, options);
+  },
+  async historyBootstrap(options?: RequestOptions): Promise<HistoryBootstrapData> {
+    if (!API_BASE_URL) {
+      const [runs, dashboard] = await Promise.all([mockApi.history(), mockApi.dashboard()]);
+      return { runs, dashboard };
+    }
+
+    return request("/api/bootstrap/history", undefined, options);
+  },
+  async adminBootstrap(options?: RequestOptions): Promise<AdminBootstrapData> {
+    if (!API_BASE_URL) {
+      const [dashboard, audit, tournamentTypes, staffList] = await Promise.all([
+        mockApi.dashboard(),
+        mockApi.auditLog(),
+        mockApi.tournamentTypes(true),
+        mockApi.staffList()
+      ]);
+      return { dashboard, audit, tournamentTypes, staffList };
+    }
+
+    return request("/api/bootstrap/admin", undefined, options);
   },
   saveTournamentType(payload: UpsertTournamentTypePayload) {
     if (!API_BASE_URL) {
@@ -153,12 +351,12 @@ export const api = {
 
     return request("/api/admin/export-backup");
   },
-  tv() {
+  tv(options?: RequestOptions) {
     if (!API_BASE_URL) {
       return mockApi.tv();
     }
 
-    return request("/api/tv");
+    return request("/api/tv", undefined, options);
   },
   adminAdjustment(payload: AdminAdjustmentPayload) {
     if (!API_BASE_URL) {
