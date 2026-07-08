@@ -5,6 +5,7 @@ import { Button } from "../components/Button";
 import { FormField, TextInput } from "../components/FormField";
 import { Metric, Panel, PanelHeader } from "../components/Panel";
 import { SelectField } from "../components/SelectField";
+import { SkeletonPanel } from "../components/Skeleton";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import { errorMessage } from "../lib/errors";
@@ -286,6 +287,15 @@ export function AdminPage() {
       </PageTitle>
       {error ? <div className="mb-4"><StatusMessage tone="error">{error}</StatusMessage></div> : null}
       {message ? <div className="mb-4"><StatusMessage tone="success">{message}</StatusMessage></div> : null}
+      {!dashboard ? (
+        <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+          <SkeletonPanel rows={4} />
+          <SkeletonPanel rows={3} />
+          <div className="xl:col-span-2"><SkeletonPanel rows={2} /></div>
+          <div className="xl:col-span-2"><SkeletonPanel rows={3} /></div>
+        </div>
+      ) : (
+      <>
       <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <Panel>
           <PanelHeader
@@ -516,6 +526,8 @@ export function AdminPage() {
           </div>
         </Panel>
       </div>
+      </>
+      )}
     </>
   );
 }

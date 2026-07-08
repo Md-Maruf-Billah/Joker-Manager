@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Club, Diamond, Heart, Maximize2, Spade } from "lucide-react";
+import { SkeletonBlock } from "../components/Skeleton";
 import { api } from "../lib/api";
 import { formatCurrency } from "../lib/format";
 import type { TvDisplayData, TvTier } from "../types";
@@ -132,7 +133,14 @@ export function TvDisplayPage() {
   }
 
   if (!data) {
-    return <main className="grid min-h-screen place-items-center bg-felt-950 text-paper">Loading Joker Manager...</main>;
+    return (
+      <main className="relative flex min-h-screen flex-col items-center justify-center gap-8 bg-gradient-to-br from-felt-950 via-felt-850 to-ink px-6 py-8 text-paper">
+        <SkeletonBlock className="h-20 w-20 rounded-lg" />
+        <SkeletonBlock className="h-10 w-72" />
+        <SkeletonBlock className="h-24 w-96 max-w-full" />
+        <SkeletonBlock className="h-16 w-64" />
+      </main>
+    );
   }
 
   const style = tierStyles[data.tier];

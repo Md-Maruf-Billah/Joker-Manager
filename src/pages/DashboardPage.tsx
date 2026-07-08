@@ -3,6 +3,7 @@ import { ExternalLink, Monitor, Plus, RefreshCcw, Spade } from "lucide-react";
 import { Button, ButtonLink } from "../components/Button";
 import { Metric, Panel, PanelHeader } from "../components/Panel";
 import { PageTitle } from "../components/AppShell";
+import { SkeletonMetric, SkeletonPanel } from "../components/Skeleton";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import { cardLabel } from "../lib/cards";
@@ -131,7 +132,22 @@ export function DashboardPage() {
   }, [data, timelineDays]);
 
   if (!data) {
-    return <StatusMessage>{error || "Loading dashboard..."}</StatusMessage>;
+    return (
+      <>
+        <PageTitle title="Dashboard">Current operational state for Joker Manager at PlayLive Melbourne.</PageTitle>
+        {error ? <div className="mb-4"><StatusMessage tone="error">{error}</StatusMessage></div> : null}
+        <div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr_1.45fr]">
+          <SkeletonMetric />
+          <SkeletonMetric />
+          <SkeletonMetric />
+          <SkeletonPanel rows={1} />
+        </div>
+        <div className="mt-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <SkeletonPanel rows={2} />
+          <SkeletonPanel rows={3} />
+        </div>
+      </>
+    );
   }
 
   const state = data.jackpotState;

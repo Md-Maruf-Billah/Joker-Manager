@@ -6,6 +6,7 @@ import { FormField, TextInput } from "../components/FormField";
 import { HoldButton } from "../components/HoldButton";
 import { Panel, PanelHeader } from "../components/Panel";
 import { SelectField } from "../components/SelectField";
+import { SkeletonRow } from "../components/Skeleton";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import { cardLabel } from "../lib/cards";
@@ -176,7 +177,7 @@ export function HistoryPage() {
         </div>
       </Panel>
       <Panel className="mt-6 overflow-hidden">
-        <PanelHeader title="Tournament runs">{filtered.length} rows shown.</PanelHeader>
+        <PanelHeader title="Tournament runs">{dashboard ? `${filtered.length} rows shown.` : "Loading..."}</PanelHeader>
         <div className="overflow-x-auto">
           <table className="min-w-[1260px] w-full text-left text-sm">
             <thead className="bg-paper/5 text-xs uppercase tracking-[0.12em] text-muted">
@@ -197,6 +198,13 @@ export function HistoryPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-paper/10">
+              {!dashboard ? (
+                <>
+                  <SkeletonRow columns={13} />
+                  <SkeletonRow columns={13} />
+                  <SkeletonRow columns={13} />
+                </>
+              ) : null}
               {filtered.map((run) => {
                 const expanded = rowMode?.runId === run.runId ? rowMode.kind : null;
                 const blocked = voidBlockedReason(run);

@@ -7,6 +7,7 @@ import { CardPicker } from "../components/CardPicker";
 import { FormField, TextInput } from "../components/FormField";
 import { HoldButton } from "../components/HoldButton";
 import { Metric, Panel, PanelHeader } from "../components/Panel";
+import { SkeletonPanel } from "../components/Skeleton";
 import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import { cardLabel, isJoker } from "../lib/cards";
@@ -25,11 +26,13 @@ export function DrawResultPage() {
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   async function load() {
     const [run, loadedCards] = await Promise.all([api.pendingDraw(), api.cards()]);
     setPendingRun(run as TournamentRun | null);
     setCards(loadedCards as CardView[]);
+    setLoaded(true);
   }
 
   useEffect(() => {
@@ -74,7 +77,12 @@ export function DrawResultPage() {
         Record the physical card pull. The selected card is locked out for the active cycle unless it is the Joker.
       </PageTitle>
       {error ? <div className="mb-4"><StatusMessage tone="error">{error}</StatusMessage></div> : null}
-      {!pendingRun ? (
+      {!loaded ? (
+        <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+          <SkeletonPanel rows={4} />
+          <SkeletonPanel rows={6} />
+        </div>
+      ) : !pendingRun ? (
         <Panel className="p-5">
           <StatusMessage>No tournament is currently awaiting a draw result.</StatusMessage>
           <div className="mt-4">

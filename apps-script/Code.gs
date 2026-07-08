@@ -181,6 +181,7 @@ function doGet() {
 }
 
 function handleRequest_(payload) {
+  clearSheetCache_();
   const body = payload.body || {};
 
   switch (payload.path) {
@@ -637,6 +638,7 @@ function deleteRemovedCardForRun_(runId) {
       sheet.deleteRow(row);
     }
   }
+  clearSheetCache_("Removed_Cards");
 }
 
 function exportBackup_() {
@@ -1065,10 +1067,28 @@ function ensurePasswordSalt_() {
   return salt;
 }
 
+// Sheet reads are the dominant cost of every request (each is a real round trip
+// to Google Sheets). The same sheet is often read several times while handling
+// one request (e.g. getCurrentState_ is called from half a dozen places), so
+// results are memoized here for the lifetime of a single request and cleared
+// at the start of handleRequest_. Every write helper below invalidates the
+// sheet it touches so a read-after-write within the same request never sees
+// stale data.
+let sheetObjectCache_ = {};
+
+function clearSheetCache_(sheetName) {
+  if (sheetName) {
+    delete sheetObjectCache_[sheetName];
+  } else {
+    sheetObjectCache_ = {};
+  }
+}
+
 function appendRows_(sheetName, rows) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   if (!rows.length) return;
   sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+  clearSheetCache_(sheetName);
 }
 
 function appendObject_(sheetName, object) {
@@ -1077,12 +1097,19 @@ function appendObject_(sheetName, object) {
 }
 
 function getObjects_(sheetName) {
+  if (sheetObjectCache_[sheetName]) {
+    return sheetObjectCache_[sheetName];
+  }
+
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
-  if (!sheet || sheet.getLastRow() < 2) return [];
+  if (!sheet || sheet.getLastRow() < 2) {
+    sheetObjectCache_[sheetName] = [];
+    return sheetObjectCache_[sheetName];
+  }
 
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
-  return values
+  sheetObjectCache_[sheetName] = values
     .filter(function (row) { return row.some(function (value) { return value !== ""; }); })
     .map(function (row) {
       const object = {};
@@ -1091,6 +1118,8 @@ function getObjects_(sheetName) {
       });
       return object;
     });
+
+  return sheetObjectCache_[sheetName];
 }
 
 function updateObjectByKey_(sheetName, keyHeader, keyValue, updates) {
@@ -1110,6 +1139,7 @@ function updateObjectByKey_(sheetName, keyHeader, keyValue, updates) {
         }
       });
       sheet.getRange(rowIndex + 2, 1, 1, headers.length).setValues([next]);
+      clearSheetCache_(sheetName);
       return;
     }
   }
@@ -1128,6 +1158,7 @@ function deleteRemovedCardsForCycle_(cycleId) {
       sheet.deleteRow(row);
     }
   }
+  clearSheetCache_("Removed_Cards");
 }
 
 function runFromRow_(row) {
