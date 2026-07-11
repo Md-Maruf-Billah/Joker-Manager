@@ -80,7 +80,9 @@ export type AuditLogEntry = {
     | "VERIFY_PASSWORD"
     | "CREATE_STAFF"
     | "SET_STAFF_PIN"
-    | "SET_STAFF_ACTIVE";
+    | "SET_STAFF_ACTIVE"
+    | "PUSH_TV_ANNOUNCEMENT"
+    | "CLEAR_TV_ANNOUNCEMENT";
   recordId: string;
   fieldChanged: string;
   oldValue: string;
@@ -134,6 +136,12 @@ export type CardView = {
 
 export type TvTier = "fresh" | "building" | "hot" | "probability" | "danger";
 
+export type TvMessage = {
+  active: boolean;
+  title: string;
+  sub: string;
+};
+
 export type TvDisplayData = {
   jackpot: number;
   cardsRemaining: number;
@@ -149,6 +157,7 @@ export type TvDisplayData = {
     subline: string;
     cta: string;
   };
+  tvMessage: TvMessage;
   refreshedAt: string;
 };
 
@@ -191,6 +200,7 @@ export type AdminBootstrapData = {
   audit: AuditLogEntry[];
   tournamentTypes: TournamentType[];
   staffList: StaffListItem[];
+  tvMessage: TvMessage;
 };
 
 export type CreateTournamentPayload = {
@@ -260,6 +270,18 @@ export type SetStaffPinPayload = {
 export type SetStaffActivePayload = {
   targetStaffName: string;
   active: boolean;
+  staffName: string;
+  pin: string;
+};
+
+export type PushTvAnnouncementPayload = {
+  title: string;
+  sub: string;
+  staffName: string;
+  pin: string;
+};
+
+export type ClearTvAnnouncementPayload = {
   staffName: string;
   pin: string;
 };

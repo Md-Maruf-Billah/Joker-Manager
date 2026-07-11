@@ -1,5 +1,5 @@
 import { Fragment, FormEvent, useEffect, useState } from "react";
-import { Download, KeyRound, PlusCircle, RotateCcw, Save, ShieldCheck, UserCheck, UserPlus, UserX, X } from "lucide-react";
+import { AlertTriangle, Download, KeyRound, MonitorPlay, PlusCircle, RotateCcw, Save, ShieldCheck, UserCheck, UserPlus, UserX, X } from "lucide-react";
 import { PageTitle } from "../components/AppShell";
 import { Button } from "../components/Button";
 import { FormField, TextInput } from "../components/FormField";
@@ -12,7 +12,7 @@ import { errorMessage } from "../lib/errors";
 import { formatCurrency, formatDateTime } from "../lib/format";
 import { resetMockData } from "../lib/mockApi";
 import { useSession } from "../lib/session";
-import type { AuditLogEntry, DashboardData, StaffListItem, TournamentType } from "../types";
+import type { AuditLogEntry, DashboardData, StaffListItem, TournamentType, TvMessage } from "../types";
 
 type StaffRowMode = { staffId: string; kind: "pin" | "toggle" } | null;
 
@@ -22,6 +22,13 @@ export function AdminPage() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(() => initialBootstrap?.dashboard ?? null);
   const [audit, setAudit] = useState<AuditLogEntry[]>(() => initialBootstrap?.audit ?? []);
   const [tournamentTypes, setTournamentTypes] = useState<TournamentType[]>(() => initialBootstrap?.tournamentTypes ?? []);
+  const [tvMessage, setTvMessage] = useState<TvMessage | null>(() => initialBootstrap?.tvMessage ?? null);
+  const [tvTitle, setTvTitle] = useState("");
+  const [tvSub, setTvSub] = useState("");
+  const [tvPin, setTvPin] = useState("");
+  const [tvError, setTvError] = useState("");
+  const [tvNotice, setTvNotice] = useState("");
+  const [tvLoading, setTvLoading] = useState(false);
   const [selectedTypeId, setSelectedTypeId] = useState("__new");
   const [typeName, setTypeName] = useState("");
   const [typeShortName, setTypeShortName] = useState("");
@@ -55,6 +62,7 @@ export function AdminPage() {
     setAudit(bootstrap.audit);
     setTournamentTypes(bootstrap.tournamentTypes);
     setStaffList(bootstrap.staffList);
+    setTvMessage(bootstrap.tvMessage);
   }
 
   useEffect(() => {
@@ -176,6 +184,48 @@ export function AdminPage() {
     }
   }
 
+  async function pushAnnouncement(event: FormEvent) {
+    event.preventDefault();
+    setTvError("");
+    setTvNotice("");
+    setTvLoading(true);
+
+    try {
+      await api.pushTvAnnouncement({
+        title: tvTitle,
+        sub: tvSub,
+        staffName: session.staffName,
+        pin: tvPin
+      });
+      setTvTitle("");
+      setTvSub("");
+      setTvPin("");
+      setTvNotice("Announcement pushed to TV.");
+      await load({ bypassCache: true });
+    } catch (err) {
+      setTvError(errorMessage(err, "JM-TV-900", "Could not push announcement."));
+    } finally {
+      setTvLoading(false);
+    }
+  }
+
+  async function clearAnnouncement() {
+    setTvError("");
+    setTvNotice("");
+    setTvLoading(true);
+
+    try {
+      await api.clearTvAnnouncement({ staffName: session.staffName, pin: tvPin });
+      setTvPin("");
+      setTvNotice("Announcement cleared from TV.");
+      await load({ bypassCache: true });
+    } catch (err) {
+      setTvError(errorMessage(err, "JM-TV-901", "Could not clear announcement."));
+    } finally {
+      setTvLoading(false);
+    }
+  }
+
   async function submitAddStaff(event: FormEvent) {
     event.preventDefault();
     setStaffError("");
@@ -286,7 +336,7 @@ export function AdminPage() {
       {error ? <div className="mb-4"><StatusMessage tone="error">{error}</StatusMessage></div> : null}
       {message ? <div className="mb-4"><StatusMessage tone="success">{message}</StatusMessage></div> : null}
       {!dashboard ? (
-        <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+        <div className="grid gap-[18px] xl:grid-cols-[0.9fr_1.1fr]">
           <SkeletonPanel rows={4} />
           <SkeletonPanel rows={3} />
           <div className="xl:col-span-2"><SkeletonPanel rows={2} /></div>
@@ -294,7 +344,7 @@ export function AdminPage() {
         </div>
       ) : (
       <>
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+      <div className="grid gap-[18px] xl:grid-cols-[0.9fr_1.1fr]">
         <Panel>
           <PanelHeader
             title="Tournament types"
@@ -307,7 +357,7 @@ export function AdminPage() {
           >
             Add or edit tournament names and per-entry jackpot amounts. Active types appear in Add Tournament.
           </PanelHeader>
-          <form className="grid gap-4 p-5" onSubmit={saveTournamentType}>
+          <form className="grid gap-4 p-[24px] px-[26px]" onSubmit={saveTournamentType}>
             <SelectField
               label="Edit existing"
               value={selectedTypeId}
@@ -323,15 +373,15 @@ export function AdminPage() {
             />
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField label="Tournament name">
-                <TextInput value={typeName} onChange={(event) => setTypeName(event.target.value)} placeholder="Friday Joker Bounty" />
+                <TextInput value={typeName} onChange={(event) => setTypeName(event.target.value)} />
               </FormField>
               <FormField label="Short name">
-                <TextInput value={typeShortName} onChange={(event) => setTypeShortName(event.target.value)} placeholder="Friday Joker" />
+                <TextInput value={typeShortName} onChange={(event) => setTypeShortName(event.target.value)} />
               </FormField>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField label="Jackpot per entry">
-                <TextInput value={typeAmount} onChange={(event) => setTypeAmount(event.target.value)} inputMode="decimal" placeholder="40" />
+                <TextInput value={typeAmount} onChange={(event) => setTypeAmount(event.target.value)} inputMode="decimal" />
               </FormField>
               <SelectField
                 label="Status"
@@ -354,11 +404,11 @@ export function AdminPage() {
         </Panel>
         <Panel>
           <PanelHeader title="Current state">Manual adjustment tools for exceptional corrections.</PanelHeader>
-          <div className="grid gap-4 p-5 sm:grid-cols-2">
+          <div className="grid gap-4 p-[24px] px-[26px] sm:grid-cols-2">
             <Metric label="Current jackpot" value={dashboard ? formatCurrency(dashboard.jackpotState.currentJackpot) : "..."} tone="gold" />
             <Metric label="Cards remaining" value={dashboard ? `${dashboard.jackpotState.cardsRemaining} / 53` : "..."} tone="green" />
           </div>
-          <form className="grid gap-4 border-t border-paper/10 p-5" onSubmit={submit}>
+          <form className="grid gap-4 border-t border-black/[0.07] p-[24px] px-[26px]" onSubmit={submit}>
             <SelectField
               label="Adjustment type"
               value={adjustmentType}
@@ -372,17 +422,22 @@ export function AdminPage() {
             />
             {adjustmentType !== "reset_deck" ? (
               <FormField label="Amount">
-                <TextInput value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" placeholder="500" />
+                <TextInput value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" />
               </FormField>
             ) : (
-              <div className="rounded-md border border-joker-red/35 bg-joker-red/10 p-4">
-                <div className="text-sm font-black text-paper">Deck reset confirmation</div>
-                <p className="mt-1 text-sm leading-6 text-muted">
-                  Reset deck removes all cards from current cycle demo view and sets cards remaining to 53.
+              <div className="rounded-xl border border-brand-danger/35 bg-brand-danger/[0.06] p-4">
+                <div className="flex items-center gap-2 text-[15px] font-extrabold text-ink">
+                  <AlertTriangle className="h-[17px] w-[17px] text-brand-danger" />
+                  Deck reset confirmation
+                </div>
+                <p className="mt-2 text-[13px] leading-6 text-muted">
+                  Reset deck removes all cards from the current cycle and sets cards remaining to 53.
                 </p>
-                <FormField label="Type RESET">
-                  <TextInput value={resetConfirm} onChange={(event) => setResetConfirm(event.target.value)} placeholder="RESET" />
-                </FormField>
+                <div className="mt-3.5">
+                  <FormField label="Type RESET">
+                    <TextInput value={resetConfirm} onChange={(event) => setResetConfirm(event.target.value)} placeholder="RESET" />
+                  </FormField>
+                </div>
               </div>
             )}
             <FormField label="Reason">
@@ -401,16 +456,53 @@ export function AdminPage() {
             </Button>
           </form>
         </Panel>
-        <Panel className="xl:col-span-2">
+        <Panel>
+          <PanelHeader title="TV announcement">Pushes a message onto the customer-facing TV display.</PanelHeader>
+          <form className="grid gap-3.5 p-[22px] px-[26px]" onSubmit={pushAnnouncement}>
+            <FormField label="Headline">
+              <TextInput value={tvTitle} onChange={(event) => setTvTitle(event.target.value)} />
+            </FormField>
+            <FormField label="Subtext">
+              <TextInput value={tvSub} onChange={(event) => setTvSub(event.target.value)} />
+            </FormField>
+            <FormField label="Staff password">
+              <TextInput value={tvPin} onChange={(event) => setTvPin(event.target.value)} type="password" />
+            </FormField>
+            {tvError ? <StatusMessage tone="error">{tvError}</StatusMessage> : null}
+            {tvNotice ? <StatusMessage tone="success">{tvNotice}</StatusMessage> : null}
+            <div className="flex gap-2.5">
+              <Button variant="admin" type="submit" className="flex-1" disabled={!tvTitle.trim() || !tvPin || tvLoading}>
+                <MonitorPlay className="h-4 w-4" />
+                {tvLoading ? "Pushing..." : "Push to TV"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => void clearAnnouncement()}
+                disabled={!tvMessage?.active || !tvPin || tvLoading}
+              >
+                Clear
+              </Button>
+            </div>
+            {tvMessage?.active ? (
+              <div className="rounded-xl border border-brand-gold/40 bg-brand-gold/[0.08] px-3.5 py-3">
+                <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-jackpot">Live on TV</div>
+                <div className="mt-1 text-sm font-bold text-ink">{tvMessage.title}</div>
+                <div className="mt-0.5 text-[12.5px] text-inksoft">{tvMessage.sub}</div>
+              </div>
+            ) : null}
+          </form>
+        </Panel>
+        <Panel className="xl:col-span-2 overflow-hidden">
           <PanelHeader
             title="Staff"
             action={<span className="text-xs text-muted">{staffList.filter((item) => item.active).length} active</span>}
           >
             Add staff members, reset PINs, and deactivate accounts. Everyone shares the same permission level.
           </PanelHeader>
-          <form className="grid gap-4 border-b border-paper/10 p-5 sm:grid-cols-2 lg:grid-cols-4" onSubmit={submitAddStaff}>
+          <form className="grid gap-4 border-b border-black/[0.07] p-[24px] px-[26px] sm:grid-cols-2 lg:grid-cols-4" onSubmit={submitAddStaff}>
             <FormField label="New staff name">
-              <TextInput value={newStaffName} onChange={(event) => setNewStaffName(event.target.value)} placeholder="Sarah" />
+              <TextInput value={newStaffName} onChange={(event) => setNewStaffName(event.target.value)} />
             </FormField>
             <FormField label="New PIN" hint="At least 4 characters">
               <TextInput value={newStaffPin} onChange={(event) => setNewStaffPin(event.target.value)} type="password" />
@@ -428,17 +520,17 @@ export function AdminPage() {
               </Button>
             </div>
           </form>
-          {staffError ? <div className="p-5 pb-0"><StatusMessage tone="error">{staffError}</StatusMessage></div> : null}
-          {staffMessage ? <div className="p-5 pb-0"><StatusMessage tone="success">{staffMessage}</StatusMessage></div> : null}
-          <div className="divide-y divide-paper/10">
+          {staffError ? <div className="p-[24px] px-[26px] pb-0"><StatusMessage tone="error">{staffError}</StatusMessage></div> : null}
+          {staffMessage ? <div className="p-[24px] px-[26px] pb-0"><StatusMessage tone="success">{staffMessage}</StatusMessage></div> : null}
+          <div className="divide-y divide-black/[0.06]">
             {staffList.map((member) => {
               const expanded = staffRowMode?.staffId === member.staffId ? staffRowMode.kind : null;
 
               return (
                 <Fragment key={member.staffId}>
-                  <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3 px-[26px] py-4">
                     <div>
-                      <div className="font-semibold text-paper">{member.staffName}</div>
+                      <div className="font-bold text-ink">{member.staffName}</div>
                       <div className="text-xs text-muted">{member.active ? "Active" : "Inactive"}</div>
                     </div>
                     <div className="flex gap-2">
@@ -463,7 +555,7 @@ export function AdminPage() {
                     </div>
                   </div>
                   {expanded === "pin" ? (
-                    <div className="bg-paper/[0.03] p-4">
+                    <div className="bg-black/[0.02] px-[26px] py-4">
                       <form className="grid gap-4 sm:grid-cols-3" onSubmit={(event) => void submitPinReset(event, member)}>
                         <FormField label="New PIN" hint="At least 4 characters">
                           <TextInput value={rowPinValue} onChange={(event) => setRowPinValue(event.target.value)} type="password" />
@@ -484,7 +576,7 @@ export function AdminPage() {
                     </div>
                   ) : null}
                   {expanded === "toggle" ? (
-                    <div className="bg-paper/[0.03] p-4">
+                    <div className="bg-black/[0.02] px-[26px] py-4">
                       <form className="grid gap-4 sm:grid-cols-3" onSubmit={(event) => void submitToggleActive(event, member)}>
                         <FormField label="Your staff password">
                           <TextInput value={rowPassword} onChange={(event) => setRowPassword(event.target.value)} type="password" />
@@ -506,19 +598,19 @@ export function AdminPage() {
             })}
           </div>
         </Panel>
-        <Panel className="xl:col-span-2">
+        <Panel className="xl:col-span-2 overflow-hidden">
           <PanelHeader title="Change log">Every write action leaves a trail.</PanelHeader>
-          <div className="max-h-[620px] overflow-auto divide-y divide-paper/10">
+          <div className="max-h-[620px] overflow-auto divide-y divide-black/[0.06]">
             {audit.map((log) => (
-              <div key={log.logId} className="p-4">
+              <div key={log.logId} className="px-[26px] py-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <span className="font-semibold text-paper">{log.action}</span>
-                  <span className="text-xs text-muted">{formatDateTime(log.timestamp)}</span>
+                  <span className="font-bold text-ink">{log.action}</span>
+                  <span className="text-xs text-faint">{formatDateTime(log.timestamp)}</span>
                 </div>
-                <div className="mt-2 text-sm leading-6 text-muted">
+                <div className="mt-1.5 text-[13px] leading-6 text-muted">
                   {log.staffName} ({log.role}) changed {log.fieldChanged} from {log.oldValue || "blank"} to {log.newValue || "blank"}.
                 </div>
-                <div className="mt-1 text-xs text-muted">Reason: {log.reason}</div>
+                <div className="mt-1 text-xs text-faint">Reason: {log.reason}</div>
               </div>
             ))}
           </div>

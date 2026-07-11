@@ -33,6 +33,8 @@ const routes: Record<string, RouteConfig> = {
   "/api/admin/staff/create": { methods: ["POST"] },
   "/api/admin/staff/set-pin": { methods: ["POST"] },
   "/api/admin/staff/set-active": { methods: ["POST"] },
+  "/api/admin/tv-message/push": { methods: ["POST"] },
+  "/api/admin/tv-message/clear": { methods: ["POST"] },
   "/api/auth/verify-pin": { methods: ["POST"] }
 };
 
@@ -66,7 +68,9 @@ const MUTATING_ROUTES = new Set([
   "/api/admin/adjustment",
   "/api/admin/staff/create",
   "/api/admin/staff/set-pin",
-  "/api/admin/staff/set-active"
+  "/api/admin/staff/set-active",
+  "/api/admin/tv-message/push",
+  "/api/admin/tv-message/clear"
 ]);
 const CACHE_FRESH_SECONDS = 8;
 const CACHE_RETAIN_SECONDS = 6 * 60 * 60;

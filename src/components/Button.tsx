@@ -5,20 +5,18 @@ import { clsx } from "clsx";
 type ButtonVariant = "primary" | "secondary" | "danger" | "admin" | "ghost";
 
 const variantClass: Record<ButtonVariant, string> = {
-  primary:
-    "bg-gold-400 text-ink shadow-glow hover:bg-gold-300 focus-visible:outline-gold-300",
+  primary: "min-h-[46px] px-5 rounded-[11px] bg-brand-red text-white font-bold text-sm hover:bg-brand-redDark focus-visible:outline-brand-red",
   secondary:
-    "border border-paper/12 bg-paper/6 text-paper hover:bg-paper/10 focus-visible:outline-paper/50",
+    "min-h-10 px-4 rounded-[10px] border border-black/12 bg-card text-ink font-semibold text-[13px] hover:bg-black/[0.03] focus-visible:outline-black/30",
   danger:
-    "border border-joker-red/45 bg-joker-red/10 text-paper hover:bg-joker-red/18 focus-visible:outline-joker-red",
+    "min-h-10 px-4 rounded-[10px] border border-brand-danger/35 bg-brand-danger/[0.08] text-brand-redDark font-semibold text-[13px] hover:bg-brand-danger/[0.14] focus-visible:outline-brand-danger",
   admin:
-    "border border-joker-purple/45 bg-joker-purple/18 text-paper hover:bg-joker-purple/26 focus-visible:outline-joker-purple",
-  ghost:
-    "text-muted hover:bg-paper/7 hover:text-paper focus-visible:outline-paper/40"
+    "min-h-[46px] px-5 rounded-[11px] border border-brand-teal/40 bg-brand-teal/[0.09] text-brand-teal font-bold text-sm hover:bg-brand-teal/[0.16] focus-visible:outline-brand-teal",
+  ghost: "min-h-10 px-4 rounded-[10px] text-muted font-semibold text-[13px] hover:bg-black/[0.04] hover:text-ink focus-visible:outline-black/30"
 };
 
 const baseClass =
-  "inline-flex min-h-11 max-w-full items-center justify-center gap-2 rounded-md px-4 py-2 text-center text-sm font-semibold leading-tight transition duration-150 ease-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-45";
+  "inline-flex max-w-full items-center justify-center gap-2 text-center leading-tight transition duration-150 ease-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-45";
 
 export function Button({
   className,

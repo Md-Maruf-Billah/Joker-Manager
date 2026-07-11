@@ -106,7 +106,10 @@ function setupJokerJackpotDatabase() {
     ["show_probability_from_cards_remaining", "20", "Show chance from 20 cards or lower"],
     ["currency", "AUD", "Display currency"],
     ["tv_refresh_seconds", "30", "TV display auto-refresh"],
-    ["app_status", "active", "Can be paused if needed"]
+    ["app_status", "active", "Can be paused if needed"],
+    ["tv_announcement_active", "false", "Whether a staff announcement is live on the TV"],
+    ["tv_announcement_title", "", "TV announcement headline"],
+    ["tv_announcement_sub", "", "TV announcement subtext"]
   ]);
 
   appendRows_("Tournament_Types", [
@@ -251,6 +254,14 @@ function handleRequest_(payload) {
       return withLock_(function () {
         return setStaffActive_(body);
       });
+    case "/api/admin/tv-message/push":
+      return withLock_(function () {
+        return pushTvAnnouncement_(body);
+      });
+    case "/api/admin/tv-message/clear":
+      return withLock_(function () {
+        return clearTvAnnouncement_(body);
+      });
     default:
       throw new Error("[JM-SCRIPT-003] Unknown route: " + payload.path);
   }
@@ -298,7 +309,8 @@ function getAdminBootstrap_() {
     dashboard: getDashboardData_(),
     audit: getAuditLog_(),
     tournamentTypes: getTournamentTypes_(true),
-    staffList: getStaffList_()
+    staffList: getStaffList_(),
+    tvMessage: getTvMessage_()
   };
 }
 
@@ -842,8 +854,58 @@ function getTvDisplayData_() {
     showProbability: cardsRemaining <= 20,
     latestWinner: latestWinner,
     copy: copyForTier_(tier, cardsRemaining),
+    tvMessage: getTvMessage_(),
     refreshedAt: new Date().toISOString()
   };
+}
+
+function getSetting_(key, defaultValue) {
+  const row = getObjects_("Settings").find(function (item) { return String(item.SettingKey) === key; });
+  return row ? String(row.SettingValue) : defaultValue;
+}
+
+function setSetting_(key, value, notes) {
+  const existing = getObjects_("Settings").find(function (item) { return String(item.SettingKey) === key; });
+  if (existing) {
+    updateObjectByKey_("Settings", "SettingKey", key, { SettingValue: value });
+  } else {
+    appendObject_("Settings", { SettingKey: key, SettingValue: value, Notes: notes || "" });
+  }
+}
+
+function getTvMessage_() {
+  return {
+    active: getSetting_("tv_announcement_active", "false") === "true",
+    title: getSetting_("tv_announcement_title", ""),
+    sub: getSetting_("tv_announcement_sub", "")
+  };
+}
+
+function pushTvAnnouncement_(body) {
+  const staff = verifyPin_(body.staffName, body.pin, "staff");
+  const title = String(body.title || "").trim();
+  const sub = String(body.sub || "").trim();
+
+  if (!title) {
+    throw new Error("[JM-TV-001] Headline is required.");
+  }
+
+  setSetting_("tv_announcement_active", "true", "Whether a staff announcement is live on the TV");
+  setSetting_("tv_announcement_title", title, "TV announcement headline");
+  setSetting_("tv_announcement_sub", sub, "TV announcement subtext");
+
+  writeAudit_(staff, "PUSH_TV_ANNOUNCEMENT", "TV_MESSAGE", "tvAnnouncement", "", title, "Announcement pushed to TV", "admin");
+  return getTvMessage_();
+}
+
+function clearTvAnnouncement_(body) {
+  const staff = verifyPin_(body.staffName, body.pin, "staff");
+  const previous = getTvMessage_();
+
+  setSetting_("tv_announcement_active", "false", "Whether a staff announcement is live on the TV");
+
+  writeAudit_(staff, "CLEAR_TV_ANNOUNCEMENT", "TV_MESSAGE", "tvAnnouncement", previous.title, "", "Announcement cleared", "admin");
+  return getTvMessage_();
 }
 
 function getLatestJokerWinner_() {

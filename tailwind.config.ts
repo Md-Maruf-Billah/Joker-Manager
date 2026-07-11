@@ -5,37 +5,69 @@ export default {
   theme: {
     extend: {
       colors: {
-        felt: {
-          950: "oklch(16% 0.018 150)",
-          900: "oklch(20% 0.02 150)",
-          850: "oklch(23% 0.022 150)",
-          800: "oklch(27% 0.024 150)"
+        // PlayLive brand palette (official brand guidelines)
+        brand: {
+          red: "#EC1E24",
+          redDark: "#B0221F",
+          danger: "#C4141A",
+          burgundy: "#7C0917",
+          green: "#034C2A",
+          teal: "#144B64",
+          gold: "#C69D42",
+          black: "#000000",
+          gray: "#D6D6D6"
         },
-        ink: "oklch(17% 0.01 72)",
-        paper: "oklch(93% 0.012 78)",
-        muted: "oklch(73% 0.026 80)",
-        gold: {
-          300: "oklch(84% 0.13 86)",
-          400: "oklch(77% 0.15 82)",
-          500: "oklch(70% 0.16 78)",
-          600: "oklch(61% 0.14 73)"
-        },
-        joker: {
-          green: "oklch(70% 0.18 153)",
-          purple: "oklch(66% 0.16 306)",
-          red: "oklch(63% 0.17 26)"
+        // Staff app (light, Apple system-gray inspired)
+        ink: "#1d1d1f",
+        inksoft: "#48484a",
+        muted: "#6e6e73",
+        faint: "#8e8e93",
+        surface: "#F5F5F7",
+        card: "#FFFFFF",
+        field: "#F5F5F6",
+        jackpot: "#96721D",
+        success: "#1F8A4F",
+        // TV display (dark, tier-themed)
+        tv: {
+          bg: "#0a0a0b",
+          fresh: "#D9B15B",
+          building: "#49B57C",
+          hot: "#EC1E24",
+          probability: "#E8C245",
+          danger: "#FF4141",
+          celebration: "#FFD666",
+          message: "#C69D42"
         }
       },
-      boxShadow: {
-        glow: "0 0 40px color-mix(in oklch, oklch(77% 0.15 82), transparent 72%)",
-        panel: "0 22px 70px color-mix(in oklch, oklch(9% 0.02 150), transparent 44%)"
-      },
       fontFamily: {
-        sans: ["Inter", "ui-sans-serif", "system-ui", "Segoe UI", "sans-serif"],
-        display: ["Inter", "ui-sans-serif", "system-ui", "Segoe UI", "sans-serif"]
+        sans: ["Montserrat", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+        display: ["Montserrat", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"]
+      },
+      boxShadow: {
+        card: "0 1px 2px rgba(0,0,0,0.03)",
+        panel: "0 24px 50px rgba(0,0,0,0.08)",
+        toast: "0 20px 40px rgba(0,0,0,0.14)"
+      },
+      keyframes: {
+        shimmer: {
+          "0%": { backgroundPosition: "-300px 0" },
+          "100%": { backgroundPosition: "300px 0" }
+        },
+        glowPulse: {
+          "0%, 100%": { opacity: "0.55" },
+          "50%": { opacity: "1" }
+        },
+        livePulse: {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.3" }
+        }
+      },
+      animation: {
+        shimmer: "shimmer 1.4s infinite linear",
+        glowPulse: "glowPulse 2.8s ease-in-out infinite",
+        livePulse: "livePulse 1.6s ease-in-out infinite"
       }
     }
   },
   plugins: []
 } satisfies Config;
-

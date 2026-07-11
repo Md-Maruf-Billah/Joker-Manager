@@ -2,6 +2,7 @@ import type {
   AddTournamentBootstrapData,
   AdminAdjustmentPayload,
   AdminBootstrapData,
+  ClearTvAnnouncementPayload,
   CreateStaffPayload,
   CreateTournamentPayload,
   DashboardData,
@@ -10,12 +11,14 @@ import type {
   HistoryBootstrapData,
   JokerData,
   LoginBootstrapData,
+  PushTvAnnouncementPayload,
   SetStaffActivePayload,
   SetStaffPinPayload,
   StaffListItem,
   StaffSession,
   SubmitDrawPayload,
   TvDisplayData,
+  TvMessage,
   UpsertTournamentTypePayload,
   VoidRunPayload
 } from "../types";
@@ -35,7 +38,9 @@ const MUTATING_PATHS = new Set([
   "/api/admin/adjustment",
   "/api/admin/staff/create",
   "/api/admin/staff/set-pin",
-  "/api/admin/staff/set-active"
+  "/api/admin/staff/set-active",
+  "/api/admin/tv-message/push",
+  "/api/admin/tv-message/clear"
 ]);
 
 const inFlightReads = new Map<string, Promise<unknown>>();
@@ -255,13 +260,14 @@ export const api = {
   },
   async adminBootstrap(options?: RequestOptions): Promise<AdminBootstrapData> {
     if (!API_BASE_URL) {
-      const [dashboard, audit, tournamentTypes, staffList] = await Promise.all([
+      const [dashboard, audit, tournamentTypes, staffList, tvMessage] = await Promise.all([
         mockApi.dashboard(),
         mockApi.auditLog(),
         mockApi.tournamentTypes(true),
-        mockApi.staffList()
+        mockApi.staffList(),
+        mockApi.tvMessage()
       ]);
-      return { dashboard, audit, tournamentTypes, staffList };
+      return { dashboard, audit, tournamentTypes, staffList, tvMessage };
     }
 
     return request("/api/bootstrap/admin", undefined, options);
@@ -401,6 +407,26 @@ export const api = {
     }
 
     return request("/api/admin/staff/set-active", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  pushTvAnnouncement(payload: PushTvAnnouncementPayload): Promise<TvMessage> {
+    if (!API_BASE_URL) {
+      return mockApi.pushTvAnnouncement(payload);
+    }
+
+    return request<TvMessage>("/api/admin/tv-message/push", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  clearTvAnnouncement(payload: ClearTvAnnouncementPayload): Promise<TvMessage> {
+    if (!API_BASE_URL) {
+      return mockApi.clearTvAnnouncement(payload);
+    }
+
+    return request<TvMessage>("/api/admin/tv-message/clear", {
       method: "POST",
       body: JSON.stringify(payload)
     });

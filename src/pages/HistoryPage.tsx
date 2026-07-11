@@ -152,60 +152,56 @@ export function HistoryPage() {
         Review tournament runs, jackpot contribution, card result, closing jackpot, and staff submission.
       </PageTitle>
       {error ? <div className="mb-4"><StatusMessage tone="error">{error}</StatusMessage></div> : null}
-      <Panel>
-        <PanelHeader title="Filters">
-          This first pass filters locally. The Worker route will forward date and staff filters to Apps Script later.
-        </PanelHeader>
-        <div className="grid gap-4 p-5 md:grid-cols-2">
-          <SelectField
-            label="Tournament type"
-            value={typeFilter}
-            onValueChange={setTypeFilter}
-            options={[
-              { value: "all", label: "All tournament types" },
-              { value: "HTJ", label: "Hyper Turbo Joker" },
-              { value: "SSJ", label: "Sunday Slam Joker Jackpot" }
-            ]}
-          />
-          <SelectField
-            label="Joker hit"
-            value={jokerFilter}
-            onValueChange={setJokerFilter}
-            options={[
-              { value: "all", label: "All results" },
-              { value: "joker", label: "Joker hit only" },
-              { value: "nonjoker", label: "Non-Joker only" }
-            ]}
-          />
+      <Panel className="p-[20px] px-[26px]">
+        <div className="flex flex-wrap gap-3.5">
+          <div className="min-w-[220px] flex-1">
+            <SelectField
+              label="Tournament type"
+              value={typeFilter}
+              onValueChange={setTypeFilter}
+              options={[
+                { value: "all", label: "All tournament types" },
+                { value: "HTJ", label: "Hyper Turbo Joker" },
+                { value: "SSJ", label: "Sunday Slam Joker Jackpot" }
+              ]}
+            />
+          </div>
+          <div className="min-w-[220px] flex-1">
+            <SelectField
+              label="Joker hit"
+              value={jokerFilter}
+              onValueChange={setJokerFilter}
+              options={[
+                { value: "all", label: "All results" },
+                { value: "joker", label: "Joker hit only" },
+                { value: "nonjoker", label: "Non-Joker only" }
+              ]}
+            />
+          </div>
         </div>
       </Panel>
-      <Panel className="mt-6 overflow-hidden">
-        <PanelHeader title="Tournament runs">{dashboard ? `${filtered.length} rows shown.` : "Loading..."}</PanelHeader>
+      <Panel className="mt-4 overflow-hidden">
+        <PanelHeader title={dashboard ? `${filtered.length} runs shown` : "Loading..."} />
         <div className="overflow-x-auto">
-          <table className="min-w-[1260px] w-full text-left text-sm">
-            <thead className="bg-paper/5 text-xs uppercase tracking-[0.12em] text-muted">
+          <table className="min-w-[1080px] w-full text-left text-[13.5px]">
+            <thead>
               <tr>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Tournament</th>
-                <th className="px-4 py-3">Entries</th>
-                <th className="px-4 py-3">Contribution</th>
-                <th className="px-4 py-3">Available</th>
-                <th className="px-4 py-3">Winner</th>
-                <th className="px-4 py-3">Card</th>
-                <th className="px-4 py-3">Joker</th>
-                <th className="px-4 py-3">Closing</th>
-                <th className="px-4 py-3">Cards after</th>
-                <th className="px-4 py-3">Staff</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Actions</th>
+                <th className="border-b border-black/[0.07] px-4 py-3 text-[11px] font-bold uppercase tracking-[0.08em] text-faint">Date</th>
+                <th className="border-b border-black/[0.07] px-4 py-3 text-[11px] font-bold uppercase tracking-[0.08em] text-faint">Tournament</th>
+                <th className="border-b border-black/[0.07] px-4 py-3 text-[11px] font-bold uppercase tracking-[0.08em] text-faint">Entries</th>
+                <th className="border-b border-black/[0.07] px-4 py-3 text-[11px] font-bold uppercase tracking-[0.08em] text-faint">Available</th>
+                <th className="border-b border-black/[0.07] px-4 py-3 text-[11px] font-bold uppercase tracking-[0.08em] text-faint">Winner</th>
+                <th className="border-b border-black/[0.07] px-4 py-3 text-[11px] font-bold uppercase tracking-[0.08em] text-faint">Card</th>
+                <th className="border-b border-black/[0.07] px-4 py-3 text-[11px] font-bold uppercase tracking-[0.08em] text-faint">Status</th>
+                <th className="border-b border-black/[0.07] px-4 py-3 text-[11px] font-bold uppercase tracking-[0.08em] text-faint">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-paper/10">
+            <tbody>
               {!dashboard ? (
                 <>
-                  <SkeletonRow columns={13} />
-                  <SkeletonRow columns={13} />
-                  <SkeletonRow columns={13} />
+                  <SkeletonRow columns={8} />
+                  <SkeletonRow columns={8} />
+                  <SkeletonRow columns={8} />
                 </>
               ) : null}
               {filtered.map((run) => {
@@ -215,120 +211,117 @@ export function HistoryPage() {
 
                 return (
                   <Fragment key={run.runId}>
-                    <tr className={isVoided ? "opacity-50 hover:bg-paper/[0.035]" : "hover:bg-paper/[0.035]"}>
-                      <td className="px-4 py-3 text-muted">{formatDateTime(run.updatedAt)}</td>
-                      <td className="px-4 py-3 font-semibold text-paper">{run.tournamentName}</td>
-                      <td className="px-4 py-3">{run.entries}</td>
-                      <td className="px-4 py-3">{formatCurrency(run.contribution)}</td>
-                      <td className="px-4 py-3 text-gold-300">{formatCurrency(run.availableJackpot)}</td>
-                      <td className="px-4 py-3">{run.winnerName ?? "Pending"}</td>
-                      <td className="px-4 py-3">{run.cardPulled ? cardLabel(run.cardPulled) : "Pending"}</td>
-                      <td className="px-4 py-3">{run.jokerHit ? "Yes" : "No"}</td>
-                      <td className="px-4 py-3">{formatCurrency(run.closingJackpot)}</td>
-                      <td className="px-4 py-3">{run.cardsAfter}</td>
-                      <td className="px-4 py-3">{run.staffName}</td>
-                      <td className="px-4 py-3">{run.status}</td>
-                      <td className="px-4 py-3">
+                    <tr className={isVoided ? "opacity-45" : "hover:bg-black/[0.015]"}>
+                      <td className="border-b border-black/[0.06] px-4 py-[13px] text-muted">{formatDateTime(run.updatedAt)}</td>
+                      <td className="border-b border-black/[0.06] px-4 py-[13px] font-bold text-ink">{run.tournamentName}</td>
+                      <td className="border-b border-black/[0.06] px-4 py-[13px]">{run.entries}</td>
+                      <td className="border-b border-black/[0.06] px-4 py-[13px] text-jackpot">{formatCurrency(run.availableJackpot)}</td>
+                      <td className="border-b border-black/[0.06] px-4 py-[13px]">{run.winnerName ?? "Pending"}</td>
+                      <td className="border-b border-black/[0.06] px-4 py-[13px]">{run.cardPulled ? cardLabel(run.cardPulled) : "Pending"}</td>
+                      <td className="border-b border-black/[0.06] px-4 py-[13px]">{run.status}</td>
+                      <td className="border-b border-black/[0.06] px-4 py-[13px]">
                         <div className="flex gap-2">
                           <Button
                             type="button"
                             variant="secondary"
-                            className="min-h-9 px-2.5 text-xs"
+                            className="min-h-8 px-2.5 text-[11.5px]"
                             disabled={isVoided}
                             onClick={() => (expanded === "edit" ? closeRow() : openEdit(run))}
                           >
-                            <Pencil className="h-3.5 w-3.5" />
+                            <Pencil className="h-3 w-3" />
                             Edit
                           </Button>
                           <Button
                             type="button"
                             variant="danger"
-                            className="min-h-9 px-2.5 text-xs"
+                            className="min-h-8 px-2.5 text-[11.5px]"
                             disabled={Boolean(blocked)}
                             title={blocked ?? undefined}
                             onClick={() => (expanded === "void" ? closeRow() : openVoid(run))}
                           >
-                            <Ban className="h-3.5 w-3.5" />
+                            <Ban className="h-3 w-3" />
                             Void
                           </Button>
                         </div>
                       </td>
                     </tr>
                     {expanded ? (
-                      <tr className="bg-paper/[0.03]">
-                        <td colSpan={13} className="px-4 py-5">
+                      <tr className="bg-black/[0.02]">
+                        <td colSpan={8} className="border-b border-black/[0.06] px-[22px] py-[18px]">
                           {expanded === "edit" ? (
                             <form
-                              className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+                              className="flex flex-wrap items-end gap-3.5"
                               onSubmit={(event) => void submitEdit(event, run)}
                             >
                               {run.status === "Complete" ? (
-                                <FormField label="Winner name">
-                                  <TextInput value={winnerName} onChange={(event) => setWinnerName(event.target.value)} />
-                                </FormField>
-                              ) : (
-                                <FormField label="Entries" hint="Only editable before the draw is submitted.">
-                                  <TextInput
-                                    value={entries}
-                                    onChange={(event) => setEntries(event.target.value)}
-                                    inputMode="numeric"
-                                  />
-                                </FormField>
-                              )}
-                              <FormField label="Reason">
-                                <TextInput value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Correction reason" />
-                              </FormField>
-                              <FormField label="Staff password">
-                                <TextInput value={pin} onChange={(event) => setPin(event.target.value)} type="password" />
-                              </FormField>
-                              <div className="flex items-end gap-2">
-                                <Button type="submit" disabled={!reason.trim() || !pin || loading}>
-                                  {loading ? "Saving..." : "Save edit"}
-                                </Button>
-                                <Button type="button" variant="ghost" onClick={closeRow}>
-                                  <X className="h-4 w-4" />
-                                  Cancel
-                                </Button>
-                              </div>
-                              {rowError ? (
-                                <div className="sm:col-span-2 lg:col-span-4">
-                                  <StatusMessage tone="error">{rowError}</StatusMessage>
+                                <div className="min-w-[220px]">
+                                  <FormField label="Winner name">
+                                    <TextInput value={winnerName} onChange={(event) => setWinnerName(event.target.value)} />
+                                  </FormField>
                                 </div>
+                              ) : (
+                                <div className="min-w-[180px]">
+                                  <FormField label="Entries" hint="Only before the draw is submitted">
+                                    <TextInput
+                                      value={entries}
+                                      onChange={(event) => setEntries(event.target.value)}
+                                      inputMode="numeric"
+                                    />
+                                  </FormField>
+                                </div>
+                              )}
+                              <div className="min-w-[220px]">
+                                <FormField label="Reason">
+                                  <TextInput value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Correction reason" />
+                                </FormField>
+                              </div>
+                              <div className="min-w-[180px]">
+                                <FormField label="Staff password">
+                                  <TextInput value={pin} onChange={(event) => setPin(event.target.value)} type="password" />
+                                </FormField>
+                              </div>
+                              <Button type="submit" disabled={!reason.trim() || !pin || loading}>
+                                {loading ? "Saving..." : "Save edit"}
+                              </Button>
+                              <Button type="button" variant="ghost" onClick={closeRow}>
+                                <X className="h-4 w-4" />
+                                Cancel
+                              </Button>
+                              {rowError ? (
+                                <div className="w-full"><StatusMessage tone="error">{rowError}</StatusMessage></div>
                               ) : null}
                               {rowMessage ? (
-                                <div className="sm:col-span-2 lg:col-span-4">
-                                  <StatusMessage tone="success">{rowMessage}</StatusMessage>
-                                </div>
+                                <div className="w-full"><StatusMessage tone="success">{rowMessage}</StatusMessage></div>
                               ) : null}
                             </form>
                           ) : (
-                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                              <FormField label="Reason">
-                                <TextInput value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Void reason" />
-                              </FormField>
-                              <FormField label="Staff password">
-                                <TextInput value={pin} onChange={(event) => setPin(event.target.value)} type="password" />
-                              </FormField>
-                              <div className="flex items-end gap-2 lg:col-span-2">
+                            <div className="flex flex-wrap items-end gap-3.5">
+                              <div className="min-w-[220px]">
+                                <FormField label="Void reason">
+                                  <TextInput value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Correction reason" />
+                                </FormField>
+                              </div>
+                              <div className="min-w-[180px]">
+                                <FormField label="Staff password">
+                                  <TextInput value={pin} onChange={(event) => setPin(event.target.value)} type="password" />
+                                </FormField>
+                              </div>
+                              <div className="min-h-[46px] min-w-[260px]">
                                 <HoldButton
-                                  label="Hold 2 seconds to void this run"
+                                  label="Hold to void"
                                   disabled={!reason.trim() || !pin || loading}
                                   onComplete={() => void submitVoid(run)}
                                 />
-                                <Button type="button" variant="ghost" onClick={closeRow}>
-                                  <X className="h-4 w-4" />
-                                  Cancel
-                                </Button>
                               </div>
+                              <Button type="button" variant="ghost" onClick={closeRow}>
+                                <X className="h-4 w-4" />
+                                Cancel
+                              </Button>
                               {rowError ? (
-                                <div className="sm:col-span-2 lg:col-span-4">
-                                  <StatusMessage tone="error">{rowError}</StatusMessage>
-                                </div>
+                                <div className="w-full"><StatusMessage tone="error">{rowError}</StatusMessage></div>
                               ) : null}
                               {rowMessage ? (
-                                <div className="sm:col-span-2 lg:col-span-4">
-                                  <StatusMessage tone="success">{rowMessage}</StatusMessage>
-                                </div>
+                                <div className="w-full"><StatusMessage tone="success">{rowMessage}</StatusMessage></div>
                               ) : null}
                             </div>
                           )}

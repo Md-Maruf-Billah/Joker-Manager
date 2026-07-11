@@ -16,100 +16,100 @@ export function CardPicker({
 }) {
   const available = cards.filter((card) => !card.removed);
   const removed = cards.filter((card) => card.removed);
-  const joker = available.find((card) => card.code === "JOKER");
+  const joker = cards.find((card) => card.code === "JOKER");
 
   return (
     <Tooltip.Provider delayDuration={120}>
-      <div className="grid gap-6">
-        <section>
-          <div className="mb-3 text-xs font-black uppercase tracking-[0.16em] text-muted">Available cards</div>
-          {joker ? (
-            <button
-              type="button"
-              onClick={() => onSelect(joker.code)}
-              className={clsx(
-                "mb-4 flex min-h-16 w-full items-center justify-center rounded-lg border text-lg font-black transition",
-                selected === joker.code
-                  ? "border-gold-300 bg-gold-400 text-ink shadow-glow"
-                  : "border-joker-purple/45 bg-joker-purple/14 text-paper hover:bg-joker-purple/22"
-              )}
-            >
-              Joker
-            </button>
-          ) : null}
-          <div className="grid gap-3">
-            {SUITS.map((suit) => {
-              const suitCards = available.filter((card) => card.suitName === suit.name);
-              return (
-                <div key={suit.code} className="grid grid-cols-[2.5rem_1fr] items-center gap-3">
-                  <div
-                    className={clsx(
-                      "grid h-10 w-10 place-items-center rounded-md border border-paper/10 bg-paper/5 text-xl font-black",
-                      suit.color === "red" ? "text-joker-red" : "text-paper"
-                    )}
-                  >
-                    {suit.symbol}
-                  </div>
-                  <div className="grid grid-cols-7 gap-2 sm:grid-cols-[repeat(13,minmax(0,1fr))]">
-                    {suitCards.map((card) => (
-                      <button
-                        key={card.code}
-                        type="button"
-                        onClick={() => onSelect(card.code)}
-                        className={clsx(
-                          "grid aspect-[5/6] min-h-12 place-items-center rounded-md border text-sm font-black transition",
-                          card.color === "red" ? "text-joker-red" : "text-paper",
-                          selected === card.code
-                            ? "border-gold-300 bg-gold-400 text-ink shadow-glow"
-                            : "border-paper/10 bg-paper/6 hover:border-gold-400/70 hover:bg-paper/10"
-                        )}
-                      >
-                        {card.rank}
-                      </button>
-                    ))}
-                  </div>
+      <div className="grid min-w-[620px] gap-[18px]">
+        <button
+          type="button"
+          disabled={joker?.removed}
+          onClick={() => joker && onSelect(joker.code)}
+          className={clsx(
+            "min-h-[50px] rounded-[11px] text-[15px] font-extrabold transition",
+            joker?.removed
+              ? "cursor-not-allowed border border-black/[0.06] bg-black/[0.02] text-[#b0b0b5] opacity-60"
+              : selected === "JOKER"
+                ? "border border-brand-red bg-brand-red text-white"
+                : "border border-brand-red/40 bg-brand-red/[0.06] text-brand-redDark hover:bg-brand-red/[0.1]"
+          )}
+        >
+          Joker
+        </button>
+        <div className="grid gap-2.5">
+          {SUITS.map((suit) => {
+            const suitCards = available.filter((card) => card.suitName === suit.name);
+            return (
+              <div key={suit.code} className="grid grid-cols-[38px_1fr] items-center gap-2.5">
+                <div
+                  className={clsx(
+                    "grid h-[38px] w-[38px] place-items-center rounded-[9px] border border-black/[0.08] bg-field text-lg font-black",
+                    suit.color === "red" ? "text-brand-red" : "text-ink"
+                  )}
+                >
+                  {suit.symbol}
                 </div>
-              );
-            })}
-          </div>
-        </section>
-        <section>
-          <div className="mb-3 text-xs font-black uppercase tracking-[0.16em] text-muted">Removed cards</div>
+                <div className="grid grid-cols-[repeat(13,minmax(0,1fr))] gap-1.5">
+                  {suitCards.map((card) => (
+                    <button
+                      key={card.code}
+                      type="button"
+                      onClick={() => onSelect(card.code)}
+                      className={clsx(
+                        "grid aspect-[5/6] min-h-[34px] place-items-center rounded-[7px] text-[12.5px] font-extrabold transition",
+                        selected === card.code
+                          ? "border border-brand-red bg-brand-red text-white shadow-[0_0_0_3px_rgba(236,30,36,0.18)]"
+                          : clsx(
+                              "border border-black/10 bg-white hover:border-brand-red/50",
+                              card.color === "red" ? "text-brand-red" : "text-ink"
+                            )
+                      )}
+                    >
+                      {card.rank}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div>
+          <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.08em] text-faint">Removed this cycle</div>
           {removed.length === 0 ? (
-            <div className="rounded-md border border-paper/10 bg-paper/5 p-4 text-sm text-muted">
+            <div className="rounded-[10px] border border-black/[0.07] bg-field p-3 text-[13px] text-muted">
               No cards have been removed in this cycle.
             </div>
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {removed.map((card) => (
                 <Tooltip.Root key={card.code}>
                   <Tooltip.Trigger asChild>
                     <button
                       type="button"
                       disabled
-                      className="inline-flex min-h-10 items-center gap-2 rounded-md border border-paper/8 bg-paper/[0.035] px-3 text-sm font-black text-muted opacity-70"
+                      className="inline-flex min-h-[30px] items-center gap-1.5 rounded-lg border border-black/[0.07] bg-black/[0.03] px-2.5 text-[12.5px] font-bold text-faint"
                     >
                       {card.label}
-                      <Info className="h-3.5 w-3.5" />
+                      <Info className="h-3 w-3" />
                     </button>
                   </Tooltip.Trigger>
                   <Tooltip.Portal>
                     <Tooltip.Content
                       sideOffset={8}
-                      className="max-w-xs rounded-md border border-paper/10 bg-felt-950 p-3 text-xs leading-5 text-paper shadow-panel"
+                      className="max-w-xs rounded-lg border border-black/10 bg-ink p-3 text-xs leading-5 text-white shadow-panel"
                     >
                       <div className="font-bold">{card.label}</div>
                       <div>Pulled by {card.removal?.playerName ?? "Unknown"}</div>
                       <div>{card.removal ? formatDateTime(card.removal.removedDate) : ""}</div>
                       <div>Run: {card.removal?.runId ?? "Unknown"}</div>
-                      <Tooltip.Arrow className="fill-felt-950" />
+                      <Tooltip.Arrow className="fill-ink" />
                     </Tooltip.Content>
                   </Tooltip.Portal>
                 </Tooltip.Root>
               ))}
             </div>
           )}
-        </section>
+        </div>
       </div>
     </Tooltip.Provider>
   );

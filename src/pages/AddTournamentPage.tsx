@@ -89,10 +89,10 @@ export function AddTournamentPage() {
       >
         Enter final CasinoWare count. Tournament names and per-entry amounts can be edited in Admin.
       </PageTitle>
-      <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+      <div className="grid gap-[18px] xl:grid-cols-[0.85fr_1.15fr]">
         <Panel>
           <PanelHeader title="Tournament details">Only active Joker tournament types are available.</PanelHeader>
-          <form className="grid gap-4 p-5" onSubmit={submit}>
+          <form className="grid gap-4 p-[24px] px-[26px]" onSubmit={submit}>
             <SelectField
               key={types.length}
               label="Tournament type"
@@ -104,8 +104,8 @@ export function AddTournamentPage() {
                 detail: `${formatCurrency(type.jackpotPerEntry)} per entry`
               }))}
             />
-            <FormField label="Final entries">
-              <TextInput value={entries} onChange={(event) => setEntries(event.target.value)} inputMode="numeric" placeholder="23" />
+            <FormField label="Final entries" hint="From CasinoWare after late registration closes">
+              <TextInput value={entries} onChange={(event) => setEntries(event.target.value)} inputMode="numeric" />
             </FormField>
             <FormField label="Staff password">
               <TextInput value={pin} onChange={(event) => setPin(event.target.value)} type="password" />
@@ -122,7 +122,7 @@ export function AddTournamentPage() {
           <PanelHeader title="Preview">
             These values are calculated by the system and will be written with the tournament run.
           </PanelHeader>
-          <div className="grid gap-4 p-5 md:grid-cols-2">
+          <div className="grid gap-4 p-[24px] px-[26px] md:grid-cols-2">
             {preview ? (
               <>
                 <Metric label="Opening jackpot" value={formatCurrency(preview.openingJackpot)} />
@@ -138,9 +138,9 @@ export function AddTournamentPage() {
               </div>
             )}
           </div>
-          <div className="border-t border-paper/10 p-5">
+          <div className="border-t border-black/[0.07] p-[24px] px-[26px]">
             <div className="flex items-center gap-2 text-sm text-muted">
-              <Calculator className="h-4 w-4 text-gold-300" />
+              <Calculator className="h-4 w-4 text-jackpot" />
               Contribution is entries multiplied by the tournament jackpot-per-entry rule.
             </div>
           </div>

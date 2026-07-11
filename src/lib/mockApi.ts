@@ -1,9 +1,11 @@
 import type {
   AdminAdjustmentPayload,
+  ClearTvAnnouncementPayload,
   CreateStaffPayload,
   CreateTournamentPayload,
   EditRunPayload,
   JokerData,
+  PushTvAnnouncementPayload,
   SetStaffActivePayload,
   SetStaffPinPayload,
   StaffSession,
@@ -13,6 +15,7 @@ import type {
 } from "../types";
 import {
   applyAdminAdjustment,
+  clearTvAnnouncement,
   createInitialData,
   createStaff,
   createTournamentRun,
@@ -22,7 +25,9 @@ import {
   getPendingRun,
   getStaffList,
   getTvDisplayData,
+  getTvMessage,
   normalizeData,
+  pushTvAnnouncement,
   setStaffActive,
   setStaffPin,
   submitDrawResult,
@@ -161,5 +166,14 @@ export const mockApi = {
   },
   async setStaffActive(payload: SetStaffActivePayload) {
     return withData((data) => setStaffActive(data, payload));
+  },
+  async tvMessage() {
+    return withData((data) => getTvMessage(data));
+  },
+  async pushTvAnnouncement(payload: PushTvAnnouncementPayload) {
+    return withData((data) => pushTvAnnouncement(data, payload));
+  },
+  async clearTvAnnouncement(payload: ClearTvAnnouncementPayload) {
+    return withData((data) => clearTvAnnouncement(data, payload));
   }
 };

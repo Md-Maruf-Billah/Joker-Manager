@@ -40,8 +40,8 @@ function smoothPath(points: Array<{ x: number; y: number }>) {
 function JackpotTrendChart({ points }: { points: JackpotTrendPoint[] }) {
   const width = 520;
   const height = 150;
-  const paddingX = 18;
-  const paddingY = 20;
+  const paddingX = 16;
+  const paddingY = 18;
   const values = points.map((point) => point.jackpot);
   const min = Math.min(...values, 0);
   const max = Math.max(...values, 1);
@@ -56,51 +56,27 @@ function JackpotTrendChart({ points }: { points: JackpotTrendPoint[] }) {
   const path = smoothPath(coordinates);
   const area = `${path} L ${width - paddingX} ${height - paddingY} L ${paddingX} ${height - paddingY} Z`;
   const latest = coordinates[coordinates.length - 1];
-  const previous = coordinates[coordinates.length - 2];
-  const delta = latest && previous ? latest.jackpot - previous.jackpot : 0;
 
   if (points.length === 0) {
     return (
-      <div className="grid min-h-[150px] place-items-center rounded-lg border border-paper/10 bg-felt-900/72 text-sm text-muted">
+      <div className="grid min-h-[150px] place-items-center rounded-xl border border-black/[0.07] bg-field text-sm text-muted">
         No jackpot history yet.
       </div>
     );
   }
 
   return (
-    <div className="min-w-0">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <div className="text-xs font-black uppercase tracking-[0.14em] text-muted">Jackpot movement</div>
-          <div className="mt-1 text-2xl font-black text-gold-300">{formatCurrency(latest?.jackpot ?? 0)}</div>
-        </div>
-        <div className={delta >= 0 ? "text-sm font-black text-joker-green" : "text-sm font-black text-joker-red"}>
-          {delta >= 0 ? "+" : ""}
-          {formatCurrency(delta)}
-        </div>
-      </div>
-      <svg className="h-[150px] w-full overflow-visible" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Jackpot movement">
-        <defs>
-          <linearGradient id="jackpotTrendArea" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="oklch(77% 0.15 82 / 0.34)" />
-            <stop offset="100%" stopColor="oklch(77% 0.15 82 / 0.02)" />
-          </linearGradient>
-        </defs>
-        {[0, 1, 2, 3].map((tick) => {
-          const y = paddingY + tick * ((height - paddingY * 2) / 3);
-          return <line key={tick} x1={paddingX} x2={width - paddingX} y1={y} y2={y} stroke="oklch(93% 0.012 78 / 0.08)" />;
-        })}
-        <path d={area} fill="url(#jackpotTrendArea)" />
-        <path d={path} fill="none" stroke="oklch(84% 0.13 86)" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" />
-        {latest ? (
-          <circle cx={latest.x} cy={latest.y} r="5" fill="oklch(16% 0.018 150)" stroke="oklch(84% 0.13 86)" strokeWidth="3" />
-        ) : null}
-      </svg>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
-        <span>{points[0]?.date}</span>
-        <span>{points[points.length - 1]?.date}</span>
-      </div>
-    </div>
+    <svg className="h-[150px] w-full overflow-visible" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Jackpot movement">
+      <defs>
+        <linearGradient id="jackpotTrendArea" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="rgba(198,157,66,0.30)" />
+          <stop offset="100%" stopColor="rgba(198,157,66,0.02)" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill="url(#jackpotTrendArea)" />
+      <path d={path} fill="none" stroke="#96721D" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3.5" />
+      {latest ? <circle cx={latest.x} cy={latest.y} r="5.5" fill="#FFFFFF" stroke="#96721D" strokeWidth="3" /> : null}
+    </svg>
   );
 }
 
@@ -140,13 +116,13 @@ export function DashboardPage() {
       <>
         <PageTitle title="Dashboard">Current operational state for Joker Manager at PlayLive Melbourne.</PageTitle>
         {error ? <div className="mb-4"><StatusMessage tone="error">{error}</StatusMessage></div> : null}
-        <div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr_1.45fr]">
+        <div className="grid gap-[18px] xl:grid-cols-[1fr_1fr_1fr_1.45fr]">
           <SkeletonMetric />
           <SkeletonMetric />
           <SkeletonMetric />
           <SkeletonPanel rows={1} />
         </div>
-        <div className="mt-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="mt-[18px] grid gap-[18px] xl:grid-cols-[1.15fr_0.85fr]">
           <SkeletonPanel rows={2} />
           <SkeletonPanel rows={3} />
         </div>
@@ -155,6 +131,8 @@ export function DashboardPage() {
   }
 
   const state = data.jackpotState;
+  const shownPoints = trendPoints.length ? trendPoints : data.jackpotTrend;
+  const latestJackpot = shownPoints[shownPoints.length - 1]?.jackpot ?? state.currentJackpot;
 
   return (
     <>
@@ -162,16 +140,12 @@ export function DashboardPage() {
         title="Dashboard"
         action={
           <div className="flex flex-wrap gap-2">
-            <ButtonLink to="/tv?mode=fullscreen" variant="primary" target="_blank">
-              <ExternalLink className="h-4 w-4" />
+            <ButtonLink to="/tv?mode=fullscreen" variant="secondary" target="_blank">
+              <Monitor className="h-[15px] w-[15px]" />
               Open TV
             </ButtonLink>
-            <ButtonLink to="/tv?display=clean" variant="secondary" target="_blank">
-              <Monitor className="h-4 w-4" />
-              Clean TV
-            </ButtonLink>
             <Button variant="secondary" onClick={() => void load({ bypassCache: true })}>
-              <RefreshCcw className={refreshing ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+              <RefreshCcw className={refreshing ? "h-[15px] w-[15px] animate-spin" : "h-[15px] w-[15px]"} />
               {refreshing ? "Refreshing..." : "Refresh"}
             </Button>
           </div>
@@ -180,44 +154,53 @@ export function DashboardPage() {
         Current operational state for Joker Manager at PlayLive Melbourne.
       </PageTitle>
       {error ? <div className="mb-4"><StatusMessage tone="error">{error}</StatusMessage></div> : null}
-      <div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr_1.45fr]">
+      <div className="grid gap-[18px] xl:grid-cols-[1fr_1fr_1fr_1.45fr]">
         <Metric label="Current jackpot" value={formatCurrency(state.currentJackpot)} detail="Includes pending contribution" tone="gold" />
         <Metric label="Cards remaining" value={`${state.cardsRemaining} / 53`} detail="Active cycle deck" tone="green" />
         <Metric label="Last card" value={state.lastCardPulled ? cardLabel(state.lastCardPulled) : "None"} detail={formatDateTime(state.lastUpdated)} />
-        <Panel className="p-4">
-          <div className="mb-3 flex flex-wrap gap-2">
+        <Panel>
+          <div className="flex items-start justify-between gap-3 p-5 pb-0">
+            <div>
+              <div className="text-[15.5px] font-bold text-ink">Jackpot movement</div>
+              <div className="mt-0.5 text-[12.5px] text-muted">Last {shownPoints.length} tournament runs.</div>
+            </div>
+            <div className="text-[19px] font-extrabold text-jackpot">{formatCurrency(latestJackpot)}</div>
+          </div>
+          <div className="flex flex-wrap gap-1.5 px-5 pt-3">
             {timelineOptions.map((option) => (
               <button
                 key={option.days}
                 type="button"
                 onClick={() => setTimelineDays(option.days)}
                 className={[
-                  "min-h-8 rounded-md px-2.5 text-xs font-black transition",
+                  "min-h-7 rounded-md px-2.5 text-[11px] font-bold transition",
                   timelineDays === option.days
-                    ? "bg-gold-400 text-ink"
-                    : "border border-paper/10 bg-paper/5 text-muted hover:bg-paper/10 hover:text-paper"
+                    ? "bg-brand-red text-white"
+                    : "border border-black/10 bg-black/[0.02] text-muted hover:bg-black/[0.05]"
                 ].join(" ")}
               >
                 {option.label}
               </button>
             ))}
           </div>
-          <JackpotTrendChart points={trendPoints.length ? trendPoints : data.jackpotTrend} />
+          <div className="p-5 pt-3">
+            <JackpotTrendChart points={shownPoints} />
+          </div>
         </Panel>
       </div>
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+      <div className="mt-[18px] grid gap-[18px] xl:grid-cols-[1.15fr_0.85fr]">
         <Panel>
           <PanelHeader
             title="Next action"
             action={
               data.pendingRun ? (
                 <ButtonLink to="/draw-result">
-                  <Spade className="h-4 w-4" />
+                  <Spade className="h-[15px] w-[15px]" />
                   Submit draw
                 </ButtonLink>
               ) : (
                 <ButtonLink to="/add-tournament">
-                  <Plus className="h-4 w-4" />
+                  <Plus className="h-[15px] w-[15px]" />
                   Add tournament
                 </ButtonLink>
               )
@@ -227,9 +210,9 @@ export function DashboardPage() {
               ? "A tournament has been created and is waiting for the physical card draw result."
               : "No unresolved draw is waiting. Add the next Joker tournament after late registration closes."}
           </PanelHeader>
-          <div className="p-5">
+          <div className="p-[22px] px-[26px]">
             {data.pendingRun ? (
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-3">
                 <Metric label="Tournament" value={data.pendingRun.tournamentName} />
                 <Metric label="Available jackpot" value={formatCurrency(data.pendingRun.availableJackpot)} tone="gold" />
                 <Metric label="Cards before draw" value={String(data.pendingRun.cardsBefore)} tone="green" />
@@ -237,16 +220,12 @@ export function DashboardPage() {
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
                 <ButtonLink to="/add-tournament">
-                  <Plus className="h-4 w-4" />
-                  Add Tournament
+                  <Plus className="h-[15px] w-[15px]" />
+                  Add tournament
                 </ButtonLink>
                 <ButtonLink to="/tv" variant="secondary" target="_blank">
-                  <Monitor className="h-4 w-4" />
-                  Open TV Display
-                </ButtonLink>
-                <ButtonLink to="/tv?display=clean" variant="secondary" target="_blank">
-                  <ExternalLink className="h-4 w-4" />
-                  Clean TV Display
+                  <ExternalLink className="h-[15px] w-[15px]" />
+                  Open TV display
                 </ButtonLink>
               </div>
             )}
@@ -254,14 +233,14 @@ export function DashboardPage() {
         </Panel>
         <Panel>
           <PanelHeader title="Recent updates">Latest changes recorded by the system.</PanelHeader>
-          <div className="divide-y divide-paper/10">
+          <div>
             {data.recentAudit.map((log) => (
-              <div key={log.logId} className="p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-semibold text-paper">{log.action}</span>
-                  <span className="text-xs text-muted">{formatDateTime(log.timestamp)}</span>
+              <div key={log.logId} className="border-t border-black/[0.06] p-4 first:border-t-0">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <span className="text-[13.5px] font-semibold text-ink">{log.action}</span>
+                  <span className="text-xs text-faint">{formatDateTime(log.timestamp)}</span>
                 </div>
-                <div className="mt-1 text-sm text-muted">
+                <div className="mt-1 text-[13px] text-muted">
                   {log.staffName} changed {log.fieldChanged} to {log.newValue}
                 </div>
               </div>

@@ -78,49 +78,57 @@ export function DrawResultPage() {
       </PageTitle>
       {error ? <div className="mb-4"><StatusMessage tone="error">{error}</StatusMessage></div> : null}
       {!loaded ? (
-        <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+        <div className="grid gap-[18px] xl:grid-cols-[0.8fr_1.2fr]">
           <SkeletonPanel rows={4} />
           <SkeletonPanel rows={6} />
         </div>
       ) : !pendingRun ? (
-        <Panel className="p-5">
+        <Panel className="p-[26px]">
           <StatusMessage>No tournament is currently awaiting a draw result.</StatusMessage>
           <div className="mt-4">
             <ButtonLink to="/add-tournament">Add tournament</ButtonLink>
           </div>
         </Panel>
       ) : (
-        <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+        <div className="grid items-start gap-[18px] xl:grid-cols-[0.8fr_1.2fr]">
           <Panel>
-            <PanelHeader title="Pending draw">{pendingRun.tournamentName} is waiting for its winner and card.</PanelHeader>
-            <form className="grid gap-4 p-5" onSubmit={submitForm}>
-              <div className="grid gap-4 sm:grid-cols-3">
+            <PanelHeader title={pendingRun.tournamentName} />
+            <form className="grid gap-4 p-[24px] px-[26px]" onSubmit={submitForm}>
+              <div className="grid grid-cols-3 gap-2.5">
                 <Metric label="Entries" value={String(pendingRun.entries)} />
-                <Metric label="Available jackpot" value={formatCurrency(pendingRun.availableJackpot)} tone="gold" />
-                <Metric label="Cards before draw" value={String(pendingRun.cardsBefore)} tone="green" />
+                <Metric label="Available" value={formatCurrency(pendingRun.availableJackpot)} tone="gold" />
+                <Metric label="Cards before" value={String(pendingRun.cardsBefore)} tone="green" />
               </div>
               <FormField label="Winner name">
-                <TextInput value={winnerName} onChange={(event) => setWinnerName(event.target.value)} placeholder="Andrew Peng" />
+                <TextInput value={winnerName} onChange={(event) => setWinnerName(event.target.value)} />
               </FormField>
               <FormField label="Selected card">
-                <TextInput value={selectedCard ? cardLabel(selectedCard) : ""} readOnly placeholder="Choose from card picker" />
+                <TextInput
+                  value={selectedCard ? cardLabel(selectedCard) : ""}
+                  readOnly
+                  placeholder="Choose from card picker"
+                  className="text-muted"
+                />
               </FormField>
               <FormField label="Staff password">
                 <TextInput value={pin} onChange={(event) => setPin(event.target.value)} type="password" />
               </FormField>
               {selectedIsJoker ? (
-                <div className="rounded-lg border border-joker-red/40 bg-joker-red/10 p-4">
-                  <div className="flex items-center gap-2 text-lg font-black text-paper">
-                    <AlertTriangle className="h-5 w-5 text-joker-red" />
+                <div className="rounded-xl border border-brand-danger/35 bg-brand-danger/[0.06] p-4">
+                  <div className="flex items-center gap-2 text-[15px] font-extrabold text-ink">
+                    <AlertTriangle className="h-[17px] w-[17px] text-brand-danger" />
                     Joker hit confirmation
                   </div>
-                  <div className="mt-2 text-sm leading-6 text-muted">
-                    Winner: {winnerName || "Not entered"}.
-                    Jackpot paid: {formatCurrency(pendingRun.availableJackpot)}.
-                    This closes the current cycle, resets the jackpot to $0, and starts a fresh 53-card deck.
+                  <div className="mt-2 text-[13px] leading-6 text-muted">
+                    This pays out {formatCurrency(pendingRun.availableJackpot)} to {winnerName || "the winner"}, closes
+                    the cycle, and starts a fresh 53-card deck.
                   </div>
-                  <div className="mt-4">
-                    <HoldButton disabled={!winnerName.trim() || !pin || loading} onComplete={() => void submit(true)} />
+                  <div className="mt-3.5">
+                    <HoldButton
+                      label="Hold 2 seconds to confirm Joker hit"
+                      disabled={!winnerName.trim() || !pin || loading}
+                      onComplete={() => void submit(true)}
+                    />
                   </div>
                 </div>
               ) : (
@@ -135,7 +143,7 @@ export function DrawResultPage() {
             <PanelHeader title="Card picker">
               Available cards stay at the top. Removed cards are disabled and shown below with removal detail.
             </PanelHeader>
-            <div className="p-5">
+            <div className="overflow-x-auto p-[22px] px-[26px]">
               <CardPicker cards={cards} selected={selectedCard} onSelect={setSelectedCard} />
             </div>
           </Panel>

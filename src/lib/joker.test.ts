@@ -3,13 +3,16 @@ import type { JokerData } from "../types";
 import {
   STARTING_DECK_SIZE,
   applyAdminAdjustment,
+  clearTvAnnouncement,
   createStaff,
   createTournamentRun,
   editRun,
   getPendingRun,
   getStaffList,
   getTvDisplayData,
+  getTvMessage,
   getTvTier,
+  pushTvAnnouncement,
   setStaffActive,
   setStaffPin,
   submitDrawResult,
@@ -236,6 +239,54 @@ describe("getTvDisplayData visibility", () => {
     expect(getTvDisplayData(data).showProbability).toBe(false);
     data.jackpotState.cardsRemaining = 20;
     expect(getTvDisplayData(data).showProbability).toBe(true);
+  });
+});
+
+describe("TV announcement", () => {
+  it("defaults to inactive with no message", () => {
+    const data = freshData();
+    expect(getTvMessage(data)).toEqual({ active: false, title: "", sub: "" });
+    expect(getTvDisplayData(data).tvMessage).toEqual({ active: false, title: "", sub: "" });
+  });
+
+  it("pushes a headline and subtext live", () => {
+    const data = freshData();
+    const result = pushTvAnnouncement(data, {
+      title: "  Sunday Slam Tonight  ",
+      sub: "  Late registration closes 6:45PM  ",
+      staffName: "staff",
+      pin: "7777"
+    });
+
+    expect(result).toEqual({ active: true, title: "Sunday Slam Tonight", sub: "Late registration closes 6:45PM" });
+    expect(getTvDisplayData(data).tvMessage.active).toBe(true);
+    expect(data.auditLog[data.auditLog.length - 1]?.action).toBe("PUSH_TV_ANNOUNCEMENT");
+  });
+
+  it("rejects a blank headline", () => {
+    const data = freshData();
+    expect(() => pushTvAnnouncement(data, { title: "  ", sub: "", staffName: "staff", pin: "7777" })).toThrow(
+      "[JM-TV-001]"
+    );
+  });
+
+  it("clears an announcement without deleting the last headline text", () => {
+    const data = freshData();
+    pushTvAnnouncement(data, { title: "Sunday Slam", sub: "Tonight", staffName: "staff", pin: "7777" });
+
+    const cleared = clearTvAnnouncement(data, { staffName: "staff", pin: "7777" });
+
+    expect(cleared.active).toBe(false);
+    expect(getTvDisplayData(data).tvMessage.active).toBe(false);
+    expect(data.auditLog[data.auditLog.length - 1]?.action).toBe("CLEAR_TV_ANNOUNCEMENT");
+  });
+
+  it("requires a valid staff password to push or clear", () => {
+    const data = freshData();
+    expect(() =>
+      pushTvAnnouncement(data, { title: "Sunday Slam", sub: "", staffName: "staff", pin: "wrong" })
+    ).toThrow("[JM-AUTH-002]");
+    expect(() => clearTvAnnouncement(data, { staffName: "staff", pin: "wrong" })).toThrow("[JM-AUTH-002]");
   });
 });
 

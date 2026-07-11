@@ -6,12 +6,11 @@ export function StatusMessage({
   children: string;
 }) {
   const className = {
-    info: "border-paper/10 bg-paper/5 text-muted",
-    success: "border-joker-green/35 bg-joker-green/10 text-paper",
-    warning: "border-gold-400/35 bg-gold-400/10 text-paper",
-    error: "border-joker-red/35 bg-joker-red/10 text-paper"
+    info: "border-black/[0.08] bg-black/[0.03] text-muted",
+    success: "border-success/30 bg-success/[0.08] text-success",
+    warning: "border-brand-gold/35 bg-brand-gold/10 text-jackpot",
+    error: "border-brand-danger/30 bg-brand-danger/[0.07] text-brand-redDark"
   }[tone];
 
-  return <div className={`rounded-md border p-3 text-sm ${className}`}>{children}</div>;
+  return <div className={`rounded-[10px] border p-3 text-[13px] ${className}`}>{children}</div>;
 }
-

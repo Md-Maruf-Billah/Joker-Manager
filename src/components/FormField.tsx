@@ -1,4 +1,5 @@
 import type { InputHTMLAttributes, ReactNode } from "react";
+import { clsx } from "clsx";
 
 export function FormField({
   label,
@@ -10,20 +11,22 @@ export function FormField({
   children: ReactNode;
 }) {
   return (
-    <label className="grid gap-2 text-sm font-medium text-paper">
+    <label className="grid gap-1.5 text-[13px] font-semibold text-inksoft">
       <span>{label}</span>
       {children}
-      {hint ? <span className="text-xs font-normal text-muted">{hint}</span> : null}
+      {hint ? <span className="text-xs font-normal text-faint">{hint}</span> : null}
     </label>
   );
 }
 
-export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
+export function TextInput({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
-      className="min-h-12 rounded-md border border-paper/12 bg-felt-900 px-3 text-base text-paper outline-none transition placeholder:text-muted/65 focus:border-gold-400"
+      className={clsx(
+        "min-h-[42px] rounded-[10px] border border-black/[0.14] bg-field px-[13px] text-sm text-ink outline-none transition focus:border-brand-red",
+        className
+      )}
       {...props}
     />
   );
 }
-

@@ -1,12 +1,14 @@
 import type {
   AdminAdjustmentPayload,
   AuditLogEntry,
+  ClearTvAnnouncementPayload,
   CreateStaffPayload,
   CreateTournamentPayload,
   DashboardData,
   EditRunPayload,
   JokerData,
   JackpotCycle,
+  PushTvAnnouncementPayload,
   RemovedCard,
   Role,
   SetStaffActivePayload,
@@ -16,6 +18,7 @@ import type {
   TournamentRun,
   TournamentType,
   TvDisplayData,
+  TvMessage,
   TvTier,
   UpsertTournamentTypePayload,
   VoidRunPayload
@@ -162,7 +165,10 @@ export function createInitialData(): JokerData {
       show_probability_from_cards_remaining: "20",
       currency: "AUD",
       tv_refresh_seconds: "30",
-      app_status: "active"
+      app_status: "active",
+      tv_announcement_active: "false",
+      tv_announcement_title: "",
+      tv_announcement_sub: ""
     },
     tournamentTypes: TOURNAMENT_TYPES,
     jackpotState: {
@@ -307,6 +313,47 @@ function copyForTier(tier: TvTier, cardsRemaining: number) {
   }
 }
 
+export function getTvMessage(data: JokerData): TvMessage {
+  return {
+    active: data.settings.tv_announcement_active === "true",
+    title: data.settings.tv_announcement_title ?? "",
+    sub: data.settings.tv_announcement_sub ?? ""
+  };
+}
+
+export function pushTvAnnouncement(data: JokerData, payload: PushTvAnnouncementPayload) {
+  const staff = verifyPin(data, payload.staffName, payload.pin);
+  const title = payload.title.trim();
+  const sub = payload.sub.trim();
+
+  if (!title) {
+    throw appError("JM-TV-001", "Headline is required.");
+  }
+
+  data.settings.tv_announcement_active = "true";
+  data.settings.tv_announcement_title = title;
+  data.settings.tv_announcement_sub = sub;
+
+  data.auditLog.push(
+    audit(staff.staffName, staff.role, "PUSH_TV_ANNOUNCEMENT", "TV_MESSAGE", "tvAnnouncement", "", title, "Announcement pushed to TV", "admin")
+  );
+
+  return getTvMessage(data);
+}
+
+export function clearTvAnnouncement(data: JokerData, payload: ClearTvAnnouncementPayload) {
+  const staff = verifyPin(data, payload.staffName, payload.pin);
+  const previous = getTvMessage(data);
+
+  data.settings.tv_announcement_active = "false";
+
+  data.auditLog.push(
+    audit(staff.staffName, staff.role, "CLEAR_TV_ANNOUNCEMENT", "TV_MESSAGE", "tvAnnouncement", previous.title, "", "Announcement cleared", "admin")
+  );
+
+  return getTvMessage(data);
+}
+
 export function getTvDisplayData(data: JokerData): TvDisplayData {
   const cardsRemaining = data.jackpotState.cardsRemaining;
   const tier = getTvTier(cardsRemaining);
@@ -319,6 +366,7 @@ export function getTvDisplayData(data: JokerData): TvDisplayData {
     showProbability: cardsRemaining <= 20,
     latestWinner: cardsRemaining >= 48 ? getLatestJokerWinner(data) : null,
     copy: copyForTier(tier, cardsRemaining),
+    tvMessage: getTvMessage(data),
     refreshedAt: nowIso()
   };
 }
