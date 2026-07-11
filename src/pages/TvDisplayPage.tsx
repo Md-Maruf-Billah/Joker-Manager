@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Maximize2 } from "lucide-react";
+import { Maximize2, Undo2 } from "lucide-react";
 import { SkeletonBlock } from "../components/Skeleton";
 import { api } from "../lib/api";
+import { errorMessage } from "../lib/errors";
 import { formatCurrency } from "../lib/format";
 import type { TvDisplayData, TvTier } from "../types";
 
@@ -60,18 +61,29 @@ export function TvDisplayPage() {
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
   const isCleanDisplay = new URLSearchParams(window.location.search).get("display") === "clean";
 
+  const [showClearPrompt, setShowClearPrompt] = useState(false);
+  const [clearStaffName, setClearStaffName] = useState("");
+  const [clearPin, setClearPin] = useState("");
+  const [clearError, setClearError] = useState("");
+  const [clearLoading, setClearLoading] = useState(false);
+
+  async function load(options: { bypassCache?: boolean } = {}) {
+    const next = (await api.tv(options)) as TvDisplayData;
+    setData(next);
+  }
+
   useEffect(() => {
     let alive = true;
 
-    async function load(options: { bypassCache?: boolean } = {}) {
+    async function loadIfAlive(options: { bypassCache?: boolean } = {}) {
       const next = (await api.tv(options)) as TvDisplayData;
       if (alive) {
         setData(next);
       }
     }
 
-    void load({ bypassCache: Boolean(data) }).catch(() => undefined);
-    const interval = window.setInterval(() => void load().catch(() => undefined), 30_000);
+    void loadIfAlive({ bypassCache: Boolean(data) }).catch(() => undefined);
+    const interval = window.setInterval(() => void loadIfAlive().catch(() => undefined), 30_000);
 
     return () => {
       alive = false;
@@ -92,6 +104,29 @@ export function TvDisplayPage() {
     const target = document.documentElement;
     if (!document.fullscreenElement && target.requestFullscreen) {
       await target.requestFullscreen();
+    }
+  }
+
+  function closeClearPrompt() {
+    setShowClearPrompt(false);
+    setClearStaffName("");
+    setClearPin("");
+    setClearError("");
+  }
+
+  async function submitClear(event: FormEvent) {
+    event.preventDefault();
+    setClearError("");
+    setClearLoading(true);
+
+    try {
+      await api.clearTvAnnouncement({ staffName: clearStaffName, pin: clearPin });
+      closeClearPrompt();
+      await load({ bypassCache: true });
+    } catch (err) {
+      setClearError(errorMessage(err, "JM-TV-902", "Could not clear announcement."));
+    } finally {
+      setClearLoading(false);
     }
   }
 
@@ -120,16 +155,77 @@ export function TvDisplayPage() {
         className="pointer-events-none absolute inset-0 opacity-90 transition-[background] duration-700"
         style={{ background: `radial-gradient(ellipse 60% 55% at 50% 42%, ${theme.glow}, transparent 70%)` }}
       />
-      {!isFullscreen && !isCleanDisplay ? (
-        <button
-          type="button"
-          onClick={() => void enterFullscreen()}
-          className="absolute right-5 top-5 z-20 grid h-11 w-11 place-items-center rounded-lg border border-white/15 bg-black/50 text-white transition hover:bg-white/10"
-          aria-label="Fullscreen"
-          title="Fullscreen"
-        >
-          <Maximize2 className="h-5 w-5" />
-        </button>
+      {!isCleanDisplay ? (
+        <div className="absolute right-5 top-5 z-20 flex gap-2">
+          {data.tvMessage.active ? (
+            <button
+              type="button"
+              onClick={() => setShowClearPrompt(true)}
+              className="flex h-11 items-center gap-2 rounded-lg border border-white/15 bg-black/50 px-3.5 text-sm font-bold text-white transition hover:bg-white/10"
+              aria-label="Back to jackpot screen"
+              title="Back to jackpot screen"
+            >
+              <Undo2 className="h-4 w-4" />
+              Back to jackpot
+            </button>
+          ) : null}
+          {!isFullscreen ? (
+            <button
+              type="button"
+              onClick={() => void enterFullscreen()}
+              className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-lg border border-white/15 bg-black/50 text-white transition hover:bg-white/10"
+              aria-label="Fullscreen"
+              title="Fullscreen"
+            >
+              <Maximize2 className="h-5 w-5" />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {showClearPrompt ? (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 px-5">
+          <form
+            onSubmit={(event) => void submitClear(event)}
+            className="w-full max-w-sm rounded-2xl border border-white/15 bg-[#141416] p-6"
+          >
+            <div className="text-lg font-extrabold text-white">Back to jackpot screen</div>
+            <div className="mt-1 text-sm text-white/60">Enter your staff password to clear the announcement.</div>
+            <div className="mt-4 grid gap-3">
+              <input
+                value={clearStaffName}
+                onChange={(event) => setClearStaffName(event.target.value)}
+                placeholder="Staff name"
+                autoFocus
+                className="min-h-11 rounded-lg border border-white/15 bg-black/40 px-3.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-white/40"
+              />
+              <input
+                value={clearPin}
+                onChange={(event) => setClearPin(event.target.value)}
+                type="password"
+                placeholder="Password"
+                className="min-h-11 rounded-lg border border-white/15 bg-black/40 px-3.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-white/40"
+              />
+            </div>
+            {clearError ? <div className="mt-3 text-sm font-semibold text-[#FF6B6B]">{clearError}</div> : null}
+            <div className="mt-4 flex gap-2">
+              <button
+                type="submit"
+                disabled={!clearStaffName.trim() || !clearPin || clearLoading}
+                className="flex-1 min-h-11 rounded-lg bg-white font-bold text-black transition disabled:opacity-40"
+              >
+                {clearLoading ? "Clearing..." : "Clear"}
+              </button>
+              <button
+                type="button"
+                onClick={closeClearPrompt}
+                className="min-h-11 rounded-lg border border-white/15 px-4 font-semibold text-white/70 transition hover:bg-white/10"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
       ) : null}
 
       <div className="relative z-10 flex flex-shrink-0 flex-col items-center gap-2.5 px-5 pt-[clamp(16px,3vh,40px)]">
