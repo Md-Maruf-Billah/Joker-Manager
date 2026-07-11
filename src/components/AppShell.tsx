@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { BarChart3, History, LogOut, Monitor, Plus, Shield, Spade } from "lucide-react";
 import { clearSession } from "../lib/mockApi";
 import type { StaffSession } from "../types";
@@ -21,6 +21,7 @@ export function AppShell({
   onLogout: () => void;
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
 
   function handleLogout() {
     clearSession();
@@ -48,7 +49,7 @@ export function AppShell({
                 to={item.to}
                 className={({ isActive }) =>
                   [
-                    "flex min-h-[38px] items-center gap-2.5 rounded-[9px] px-3 text-[13.5px] font-semibold transition",
+                    "flex min-h-[38px] items-center gap-2.5 rounded-[9px] px-3 text-[13.5px] font-semibold transition-all duration-200 ease-out active:scale-[0.98]",
                     isActive ? "bg-brand-red text-white" : "text-muted hover:bg-black/[0.035] hover:text-ink"
                   ].join(" ")
                 }
@@ -73,7 +74,7 @@ export function AppShell({
           <button
             type="button"
             onClick={handleLogout}
-            className="flex min-h-9 items-center gap-2.5 rounded-[9px] border border-black/10 px-2.5 text-[12.5px] font-semibold text-muted transition hover:bg-black/[0.03]"
+            className="flex min-h-9 items-center gap-2.5 rounded-[9px] border border-black/10 px-2.5 text-[12.5px] font-semibold text-muted transition-all duration-200 ease-out hover:bg-black/[0.03] active:scale-[0.98]"
           >
             <LogOut className="h-[15px] w-[15px]" />
             Sign out
@@ -82,7 +83,9 @@ export function AppShell({
       </aside>
       <main className="min-w-0 flex-1 px-5 py-8 sm:px-8 sm:py-10 lg:px-11 lg:pb-20">
         <div className="mx-auto max-w-[1220px]">
-          <Outlet />
+          <div key={location.pathname} className="animate-pageIn">
+            <Outlet />
+          </div>
         </div>
       </main>
     </div>

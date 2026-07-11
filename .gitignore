@@ -7,3 +7,4 @@ coverage
 *.log
 *.tsbuildinfo
 HANDOVER.md
+scripts/import-historical-data.gs

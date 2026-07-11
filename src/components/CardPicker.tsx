@@ -26,7 +26,7 @@ export function CardPicker({
           disabled={joker?.removed}
           onClick={() => joker && onSelect(joker.code)}
           className={clsx(
-            "min-h-[50px] rounded-[11px] text-[15px] font-extrabold transition",
+            "min-h-[50px] rounded-[11px] text-[15px] font-extrabold transition-all duration-150 ease-out active:scale-[0.97]",
             joker?.removed
               ? "cursor-not-allowed border border-black/[0.06] bg-black/[0.02] text-[#b0b0b5] opacity-60"
               : selected === "JOKER"
@@ -56,7 +56,7 @@ export function CardPicker({
                       type="button"
                       onClick={() => onSelect(card.code)}
                       className={clsx(
-                        "grid aspect-[5/6] min-h-[34px] place-items-center rounded-[7px] text-[12.5px] font-extrabold transition",
+                        "grid aspect-[5/6] min-h-[34px] place-items-center rounded-[7px] text-[12.5px] font-extrabold transition-all duration-150 ease-out active:scale-[0.94]",
                         selected === card.code
                           ? "border border-brand-red bg-brand-red text-white shadow-[0_0_0_3px_rgba(236,30,36,0.18)]"
                           : clsx(

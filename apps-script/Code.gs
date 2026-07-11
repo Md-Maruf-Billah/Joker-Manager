@@ -688,14 +688,17 @@ function voidRun_(body) {
 }
 
 function deleteRemovedCardForRun_(runId) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Removed_Cards");
-  if (!sheet || sheet.getLastRow() < 2) return;
+  const sheet = getSpreadsheet_().getSheetByName("Removed_Cards");
+  if (!sheet) return;
 
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const runColumn = headers.indexOf("RunID") + 1;
-  for (let row = sheet.getLastRow(); row >= 2; row--) {
-    if (String(sheet.getRange(row, runColumn).getValue()) === String(runId)) {
-      sheet.deleteRow(row);
+  const allValues = sheet.getDataRange().getValues();
+  const headers = allValues[0] || [];
+  const runColumn = headers.indexOf("RunID");
+  if (runColumn === -1) return;
+
+  for (let rowIndex = allValues.length - 1; rowIndex >= 1; rowIndex--) {
+    if (String(allValues[rowIndex][runColumn]) === String(runId)) {
+      sheet.deleteRow(rowIndex + 1);
     }
   }
   clearSheetCache_("Removed_Cards");
@@ -1178,13 +1181,23 @@ function ensurePasswordSalt_() {
 }
 
 // Sheet reads are the dominant cost of every request (each is a real round trip
-// to Google Sheets). The same sheet is often read several times while handling
-// one request (e.g. getCurrentState_ is called from half a dozen places), so
-// results are memoized here for the lifetime of a single request and cleared
-// at the start of handleRequest_. Every write helper below invalidates the
-// sheet it touches so a read-after-write within the same request never sees
-// stale data.
+// to Google Sheets, typically hundreds of milliseconds). The same sheet is often
+// read several times while handling one request (e.g. getCurrentState_ is called
+// from half a dozen places), so results are memoized here for the lifetime of a
+// single request and cleared at the start of handleRequest_. Every write helper
+// below invalidates the sheet it touches so a read-after-write within the same
+// request never sees stale data. getObjects_ also fetches header+data in a single
+// getDataRange() round trip rather than two separate getRange() calls, since
+// halving the number of round trips halves this part of the request's latency.
 let sheetObjectCache_ = {};
+let spreadsheetHandle_ = null;
+
+function getSpreadsheet_() {
+  if (!spreadsheetHandle_) {
+    spreadsheetHandle_ = SpreadsheetApp.getActiveSpreadsheet();
+  }
+  return spreadsheetHandle_;
+}
 
 function clearSheetCache_(sheetName) {
   if (sheetName) {
@@ -1195,7 +1208,7 @@ function clearSheetCache_(sheetName) {
 }
 
 function appendRows_(sheetName, rows) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  const sheet = getSpreadsheet_().getSheetByName(sheetName);
   if (!rows.length) return;
   sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
   clearSheetCache_(sheetName);
@@ -1211,14 +1224,15 @@ function getObjects_(sheetName) {
     return sheetObjectCache_[sheetName];
   }
 
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
-  if (!sheet || sheet.getLastRow() < 2) {
+  const sheet = getSpreadsheet_().getSheetByName(sheetName);
+  if (!sheet) {
     sheetObjectCache_[sheetName] = [];
     return sheetObjectCache_[sheetName];
   }
 
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
+  const allValues = sheet.getDataRange().getValues();
+  const headers = allValues[0] || [];
+  const values = allValues.slice(1);
   sheetObjectCache_[sheetName] = values
     .filter(function (row) { return row.some(function (value) { return value !== ""; }); })
     .map(function (row) {
@@ -1233,22 +1247,22 @@ function getObjects_(sheetName) {
 }
 
 function updateObjectByKey_(sheetName, keyHeader, keyValue, updates) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const sheet = getSpreadsheet_().getSheetByName(sheetName);
+  const allValues = sheet.getDataRange().getValues();
+  const headers = allValues[0] || [];
   const keyIndex = headers.indexOf(keyHeader);
   if (keyIndex === -1) throw new Error("[JM-SHEET-001] Missing key header: " + keyHeader);
 
-  const values = sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 1), headers.length).getValues();
-  for (let rowIndex = 0; rowIndex < values.length; rowIndex++) {
-    if (String(values[rowIndex][keyIndex]) === String(keyValue)) {
-      const next = values[rowIndex].slice();
+  for (let rowIndex = 1; rowIndex < allValues.length; rowIndex++) {
+    if (String(allValues[rowIndex][keyIndex]) === String(keyValue)) {
+      const next = allValues[rowIndex].slice();
       Object.keys(updates).forEach(function (header) {
         const column = headers.indexOf(header);
         if (column !== -1) {
           next[column] = updates[header];
         }
       });
-      sheet.getRange(rowIndex + 2, 1, 1, headers.length).setValues([next]);
+      sheet.getRange(rowIndex + 1, 1, 1, headers.length).setValues([next]);
       clearSheetCache_(sheetName);
       return;
     }
@@ -1258,14 +1272,17 @@ function updateObjectByKey_(sheetName, keyHeader, keyValue, updates) {
 }
 
 function deleteRemovedCardsForCycle_(cycleId) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Removed_Cards");
-  if (!sheet || sheet.getLastRow() < 2) return;
+  const sheet = getSpreadsheet_().getSheetByName("Removed_Cards");
+  if (!sheet) return;
 
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const cycleColumn = headers.indexOf("CycleID") + 1;
-  for (let row = sheet.getLastRow(); row >= 2; row--) {
-    if (String(sheet.getRange(row, cycleColumn).getValue()) === String(cycleId)) {
-      sheet.deleteRow(row);
+  const allValues = sheet.getDataRange().getValues();
+  const headers = allValues[0] || [];
+  const cycleColumn = headers.indexOf("CycleID");
+  if (cycleColumn === -1) return;
+
+  for (let rowIndex = allValues.length - 1; rowIndex >= 1; rowIndex--) {
+    if (String(allValues[rowIndex][cycleColumn]) === String(cycleId)) {
+      sheet.deleteRow(rowIndex + 1);
     }
   }
   clearSheetCache_("Removed_Cards");

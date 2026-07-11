@@ -60,12 +60,17 @@ export default {
         livePulse: {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.3" }
+        },
+        pageIn: {
+          "0%": { opacity: "0", transform: "translateY(6px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" }
         }
       },
       animation: {
         shimmer: "shimmer 1.4s infinite linear",
         glowPulse: "glowPulse 2.8s ease-in-out infinite",
-        livePulse: "livePulse 1.6s ease-in-out infinite"
+        livePulse: "livePulse 1.6s ease-in-out infinite",
+        pageIn: "pageIn 0.22s cubic-bezier(0.22,1,0.36,1)"
       }
     }
   },

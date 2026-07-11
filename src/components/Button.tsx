@@ -16,7 +16,7 @@ const variantClass: Record<ButtonVariant, string> = {
 };
 
 const baseClass =
-  "inline-flex max-w-full items-center justify-center gap-2 text-center leading-tight transition duration-150 ease-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-45";
+  "inline-flex max-w-full items-center justify-center gap-2 text-center leading-tight transition-all duration-200 ease-out active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-45 disabled:active:scale-100";
 
 export function Button({
   className,

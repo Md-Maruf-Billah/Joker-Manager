@@ -72,7 +72,18 @@ const MUTATING_ROUTES = new Set([
   "/api/admin/tv-message/push",
   "/api/admin/tv-message/clear"
 ]);
-const CACHE_FRESH_SECONDS = 8;
+// The TV display polls every 30s (see TvDisplayPage.tsx). Every poll that lands
+// past the freshness window triggers a background Apps Script call, and each of
+// those measured ~4-9s in production. A short window (this used to be 8s) means
+// almost every single TV poll pays that cost, continuously, for as long as any
+// screen is open — both slower for viewers and a meaningful, needless amount of
+// load against the Apps Script account's execution quota. Any real state change
+// (a tournament created, a draw submitted, etc.) already purges and immediately
+// re-warms the cache on write, so genuine freshness never depends on this window
+// — it only controls how long an *idle* cache entry survives before Apps Script
+// gets called again. Keeping it just under the TV's poll interval means routine
+// polling almost always hits a warm cache instead of re-triggering a fetch.
+const CACHE_FRESH_SECONDS = 25;
 const CACHE_RETAIN_SECONDS = 6 * 60 * 60;
 const REFRESH_PARAM = "__jm_refresh";
 
