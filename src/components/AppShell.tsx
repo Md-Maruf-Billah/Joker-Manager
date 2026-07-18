@@ -1,16 +1,32 @@
 import type { ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { BarChart3, History, LogOut, Monitor, Plus, Shield, Spade } from "lucide-react";
+import { BarChart3, History, ListChecks, LogOut, Monitor, Plus, Shield, Spade, Tv } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { clearSession } from "../lib/mockApi";
 import type { StaffSession } from "../types";
 
-const navItems = [
-  { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
-  { to: "/add-tournament", label: "Add tournament", icon: Plus },
-  { to: "/draw-result", label: "Draw result", icon: Spade },
-  { to: "/history", label: "History", icon: History },
-  { to: "/admin", label: "Admin", icon: Shield },
-  { to: "/tv", label: "TV display", icon: Monitor }
+type NavItem = { to: string; label: string; icon: LucideIcon };
+type NavSection = { label: string; items: NavItem[] };
+
+const navSections: NavSection[] = [
+  {
+    label: "Joker Jackpot",
+    items: [
+      { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
+      { to: "/add-tournament", label: "Add tournament", icon: Plus },
+      { to: "/draw-result", label: "Draw result", icon: Spade },
+      { to: "/history", label: "History", icon: History },
+      { to: "/admin", label: "Admin", icon: Shield },
+      { to: "/tv", label: "TV display", icon: Monitor }
+    ]
+  },
+  {
+    label: "Waitlist",
+    items: [
+      { to: "/waitlist", label: "Waitlist", icon: ListChecks },
+      { to: "/waitlist-tv", label: "Waitlist TV", icon: Tv }
+    ]
+  }
 ];
 
 export function AppShell({
@@ -40,25 +56,32 @@ export function AppShell({
           </div>
         </div>
 
-        <nav className="flex flex-col gap-0.5">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  [
-                    "flex min-h-[38px] items-center gap-2.5 rounded-[9px] px-3 text-[13.5px] font-semibold transition-all duration-200 ease-out active:scale-[0.98]",
-                    isActive ? "bg-brand-red text-white" : "text-muted hover:bg-black/[0.035] hover:text-ink"
-                  ].join(" ")
-                }
-              >
-                <Icon className="h-[17px] w-[17px] flex-shrink-0" />
-                <span className="truncate">{item.label}</span>
-              </NavLink>
-            );
-          })}
+        <nav className="flex flex-col gap-4">
+          {navSections.map((section) => (
+            <div key={section.label} className="flex flex-col gap-0.5">
+              <div className="truncate px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-faint">
+                {section.label}
+              </div>
+              {section.items.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={({ isActive }) =>
+                      [
+                        "flex min-h-[38px] items-center gap-2.5 rounded-[9px] px-3 text-[13.5px] font-semibold transition-all duration-200 ease-out active:scale-[0.98]",
+                        isActive ? "bg-brand-red text-white" : "text-muted hover:bg-black/[0.035] hover:text-ink"
+                      ].join(" ")
+                    }
+                  >
+                    <Icon className="h-[17px] w-[17px] flex-shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                  </NavLink>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <div className="mt-auto flex flex-col gap-2 pt-4">

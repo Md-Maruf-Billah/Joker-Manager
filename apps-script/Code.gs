@@ -54,7 +54,9 @@ const SHEET_HEADERS = {
     "Reason",
     "Source"
   ],
-  Staff: ["StaffID", "StaffName", "PasswordHash", "Role", "Active"]
+  Staff: ["StaffID", "StaffName", "PasswordHash", "Role", "Active"],
+  Waitlist_Games: ["GameID", "GameName", "ColorTag", "ActiveTables", "SortOrder", "Active"],
+  Waitlist_Entries: ["EntryID", "PlayerName", "GameID", "Status", "Reason", "AddedAt", "UpdatedAt", "StaffName"]
 };
 
 const RANKS = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2"];
@@ -262,6 +264,22 @@ function handleRequest_(payload) {
       return withLock_(function () {
         return clearTvAnnouncement_(body);
       });
+    case "/api/waitlist/bootstrap":
+      return getWaitlistBootstrap_();
+    case "/api/waitlist/board":
+      return getWaitlistBoard_();
+    case "/api/waitlist/entries/create":
+      return withLock_(function () {
+        return createWaitlistEntries_(body);
+      });
+    case "/api/waitlist/entries/remove":
+      return withLock_(function () {
+        return removeWaitlistEntry_(body);
+      });
+    case "/api/waitlist/games/save":
+      return withLock_(function () {
+        return saveWaitlistGame_(body);
+      });
     default:
       throw new Error("[JM-SCRIPT-003] Unknown route: " + payload.path);
   }
@@ -312,6 +330,209 @@ function getAdminBootstrap_() {
     staffList: getStaffList_(),
     tvMessage: getTvMessage_()
   };
+}
+
+const WAITLIST_COLOR_TAGS_ = ["red", "teal", "green", "gold", "burgundy"];
+
+function waitlistGameFromRow_(row) {
+  return {
+    gameId: String(row.GameID),
+    gameName: String(row.GameName),
+    colorTag: String(row.ColorTag),
+    activeTables: String(row.ActiveTables || ""),
+    sortOrder: Number(row.SortOrder || 0),
+    active: String(row.Active).toLowerCase() === "true"
+  };
+}
+
+function waitlistEntryFromRow_(row) {
+  return {
+    entryId: String(row.EntryID),
+    playerName: String(row.PlayerName),
+    gameId: String(row.GameID),
+    status: String(row.Status),
+    reason: String(row.Reason || ""),
+    addedAt: iso_(row.AddedAt),
+    updatedAt: iso_(row.UpdatedAt),
+    staffName: String(row.StaffName)
+  };
+}
+
+function getWaitlistGames_(includeInactive) {
+  return getObjects_("Waitlist_Games")
+    .filter(function (row) { return includeInactive || String(row.Active).toLowerCase() === "true"; })
+    .map(waitlistGameFromRow_)
+    .sort(function (a, b) { return a.sortOrder - b.sortOrder; });
+}
+
+function getWaitlistBoard_() {
+  const games = getWaitlistGames_(false);
+  const waitingEntries = getObjects_("Waitlist_Entries")
+    .map(waitlistEntryFromRow_)
+    .filter(function (entry) { return entry.status === "Waiting"; })
+    .sort(function (a, b) { return a.addedAt.localeCompare(b.addedAt); });
+
+  const columns = games.map(function (game) {
+    const waiting = waitingEntries.filter(function (entry) { return entry.gameId === game.gameId; });
+    return {
+      game: game,
+      waiting: waiting.map(function (entry) {
+        return { entryId: entry.entryId, playerName: entry.playerName, addedAt: entry.addedAt };
+      }),
+      waitingCount: waiting.length
+    };
+  });
+
+  return {
+    columns: columns,
+    totalWaiting: columns.reduce(function (sum, column) { return sum + column.waitingCount; }, 0),
+    refreshedAt: new Date().toISOString()
+  };
+}
+
+function getWaitlistBootstrap_() {
+  return {
+    games: getWaitlistGames_(true),
+    board: getWaitlistBoard_()
+  };
+}
+
+function createWaitlistEntries_(body) {
+  const staff = verifyPin_(body.staffName, body.pin, "staff");
+  const playerName = String(body.playerName || "").trim();
+  if (!playerName) {
+    throw new Error("[JM-WL-001] Player name is required.");
+  }
+
+  const gameIds = Array.isArray(body.gameIds) ? body.gameIds : [];
+  if (!gameIds.length) {
+    throw new Error("[JM-WL-002] Select at least one game.");
+  }
+
+  const activeGames = getWaitlistGames_(false);
+  const existingEntries = getObjects_("Waitlist_Entries");
+  const now = new Date();
+  const created = [];
+
+  gameIds.forEach(function (gameId) {
+    const game = activeGames.find(function (g) { return g.gameId === gameId; });
+    if (!game) {
+      throw new Error("[JM-WL-003] Selected game is not active.");
+    }
+
+    const duplicate = existingEntries.find(function (row) {
+      return row.GameID === gameId && row.Status === "Waiting" &&
+        String(row.PlayerName).toLowerCase() === playerName.toLowerCase();
+    });
+    if (duplicate) {
+      throw new Error("[JM-WL-004] " + playerName + " is already waiting for " + game.gameName + ".");
+    }
+
+    const entryId = newId_("WLE");
+    const row = {
+      EntryID: entryId,
+      PlayerName: playerName,
+      GameID: gameId,
+      Status: "Waiting",
+      Reason: "",
+      AddedAt: now,
+      UpdatedAt: now,
+      StaffName: staff.StaffName
+    };
+    appendObject_("Waitlist_Entries", row);
+    writeAudit_(staff, "CREATE_WAITLIST_ENTRY", entryId, "status", "", "Waiting", "Added to " + game.gameName + " waitlist", "waitlist");
+    created.push(waitlistEntryFromRow_(row));
+  });
+
+  return created;
+}
+
+function removeWaitlistEntry_(body) {
+  const staff = verifyPin_(body.staffName, body.pin, "staff");
+  const row = getObjects_("Waitlist_Entries").find(function (r) { return r.EntryID === body.entryId; });
+  if (!row) {
+    throw new Error("[JM-WL-005] Waitlist entry was not found.");
+  }
+  if (row.Status === "Removed") {
+    throw new Error("[JM-WL-006] Entry has already been removed.");
+  }
+
+  const now = new Date();
+  const reason = String(body.reason || "").trim() || "Removed from waitlist";
+  updateObjectByKey_("Waitlist_Entries", "EntryID", body.entryId, { Status: "Removed", Reason: reason, UpdatedAt: now });
+  writeAudit_(staff, "REMOVE_WAITLIST_ENTRY", body.entryId, "status", "Waiting", "Removed", reason, "waitlist");
+
+  return waitlistEntryFromRow_(Object.assign({}, row, { Status: "Removed", Reason: reason, UpdatedAt: now }));
+}
+
+function saveWaitlistGame_(body) {
+  const staff = verifyPin_(body.staffName, body.pin, "staff");
+  const gameName = String(body.gameName || "").trim();
+  const colorTag = String(body.colorTag || "").trim();
+  const sortOrder = Number(body.sortOrder);
+  const active = String(body.active).toLowerCase() === "true" || body.active === true;
+
+  if (!gameName) {
+    throw new Error("[JM-WL-007] Game name is required.");
+  }
+  if (WAITLIST_COLOR_TAGS_.indexOf(colorTag) === -1) {
+    throw new Error("[JM-WL-008] Choose a valid color tag.");
+  }
+
+  if (body.gameId) {
+    const oldRow = getObjects_("Waitlist_Games").find(function (row) { return row.GameID === body.gameId; });
+    if (!oldRow) {
+      throw new Error("[JM-WL-009] Game was not found.");
+    }
+    updateObjectByKey_("Waitlist_Games", "GameID", body.gameId, {
+      GameName: gameName,
+      ColorTag: colorTag,
+      ActiveTables: String(body.activeTables || "").trim(),
+      SortOrder: Number.isFinite(sortOrder) ? sortOrder : 0,
+      Active: active
+    });
+    writeAudit_(staff, "SAVE_WAITLIST_GAME", body.gameId, "gameName", oldRow.GameName, gameName, "Waitlist game updated", "waitlist");
+    return getWaitlistGames_(true).find(function (g) { return g.gameId === body.gameId; });
+  }
+
+  const gameId = newId_("WLG");
+  appendObject_("Waitlist_Games", {
+    GameID: gameId,
+    GameName: gameName,
+    ColorTag: colorTag,
+    ActiveTables: String(body.activeTables || "").trim(),
+    SortOrder: Number.isFinite(sortOrder) ? sortOrder : 0,
+    Active: active
+  });
+  writeAudit_(staff, "SAVE_WAITLIST_GAME", gameId, "gameName", "", gameName, "Waitlist game created", "waitlist");
+  return getWaitlistGames_(true).find(function (g) { return g.gameId === gameId; });
+}
+
+function setupWaitlistTables() {
+  const ss = getSpreadsheet_();
+
+  ["Waitlist_Games", "Waitlist_Entries"].forEach(function (name) {
+    let sheet = ss.getSheetByName(name);
+    if (sheet && sheet.getLastRow() > 1) {
+      return;
+    }
+
+    sheet = sheet || ss.insertSheet(name);
+    sheet.clear();
+    sheet.getRange(1, 1, 1, SHEET_HEADERS[name].length).setValues([SHEET_HEADERS[name]]);
+    sheet.setFrozenRows(1);
+  });
+
+  clearSheetCache_("Waitlist_Games");
+
+  if (!getObjects_("Waitlist_Games").length) {
+    appendRows_("Waitlist_Games", [
+      ["WG_1", "$1/3 NLHE", "red", "", 1, true],
+      ["WG_2", "$2/5 NLHE", "teal", "", 2, true],
+      ["WG_3", "$1/3 PLO", "green", "", 3, true],
+      ["WG_4", "$5/10 NLHE", "gold", "", 4, true]
+    ]);
+  }
 }
 
 function getDashboardData_() {

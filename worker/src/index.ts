@@ -35,7 +35,12 @@ const routes: Record<string, RouteConfig> = {
   "/api/admin/staff/set-active": { methods: ["POST"] },
   "/api/admin/tv-message/push": { methods: ["POST"] },
   "/api/admin/tv-message/clear": { methods: ["POST"] },
-  "/api/auth/verify-pin": { methods: ["POST"] }
+  "/api/auth/verify-pin": { methods: ["POST"] },
+  "/api/waitlist/bootstrap": { methods: ["GET"] },
+  "/api/waitlist/board": { methods: ["GET"] },
+  "/api/waitlist/entries/create": { methods: ["POST"] },
+  "/api/waitlist/entries/remove": { methods: ["POST"] },
+  "/api/waitlist/games/save": { methods: ["POST"] }
 };
 
 // Apps Script requests are inherently slow (typically multiple seconds).
@@ -57,7 +62,9 @@ const CACHEABLE_GET_ROUTES = new Set([
   "/api/cards",
   "/api/history",
   "/api/admin/audit-log",
-  "/api/admin/staff"
+  "/api/admin/staff",
+  "/api/waitlist/bootstrap",
+  "/api/waitlist/board"
 ]);
 const MUTATING_ROUTES = new Set([
   "/api/tournament-types/save",
@@ -70,7 +77,10 @@ const MUTATING_ROUTES = new Set([
   "/api/admin/staff/set-pin",
   "/api/admin/staff/set-active",
   "/api/admin/tv-message/push",
-  "/api/admin/tv-message/clear"
+  "/api/admin/tv-message/clear",
+  "/api/waitlist/entries/create",
+  "/api/waitlist/entries/remove",
+  "/api/waitlist/games/save"
 ]);
 // The TV display polls every 30s (see TvDisplayPage.tsx). Every poll that lands
 // past the freshness window triggers a background Apps Script call, and each of
@@ -100,13 +110,16 @@ const PURGE_CACHE_KEYS = [
   ["/api/cards", ""],
   ["/api/history", ""],
   ["/api/admin/audit-log", ""],
-  ["/api/admin/staff", ""]
+  ["/api/admin/staff", ""],
+  ["/api/waitlist/bootstrap", ""],
+  ["/api/waitlist/board", ""]
 ] as const;
 
 const WARM_AFTER_WRITE_KEYS = [
   ["/api/dashboard", ""],
   ["/api/tv", ""],
-  ["/api/bootstrap/draw", ""]
+  ["/api/bootstrap/draw", ""],
+  ["/api/waitlist/board", ""]
 ] as const;
 
 // @cloudflare/workers-types' CacheStorage type doesn't declare `default`

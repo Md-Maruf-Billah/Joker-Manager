@@ -5,6 +5,7 @@ import type {
   ClearTvAnnouncementPayload,
   CreateStaffPayload,
   CreateTournamentPayload,
+  CreateWaitlistEntriesPayload,
   DashboardData,
   DrawBootstrapData,
   EditRunPayload,
@@ -12,6 +13,8 @@ import type {
   JokerData,
   LoginBootstrapData,
   PushTvAnnouncementPayload,
+  RemoveWaitlistEntryPayload,
+  SaveWaitlistGamePayload,
   SetStaffActivePayload,
   SetStaffPinPayload,
   StaffListItem,
@@ -20,10 +23,15 @@ import type {
   TvDisplayData,
   TvMessage,
   UpsertTournamentTypePayload,
-  VoidRunPayload
+  VoidRunPayload,
+  WaitlistBoardData,
+  WaitlistBootstrapData,
+  WaitlistEntry,
+  WaitlistGame
 } from "../types";
 import { appError } from "./errors";
 import { mockApi } from "./mockApi";
+import { mockWaitlistApi } from "./mockWaitlistApi";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string | undefined;
 const API_CACHE_PREFIX = "joker-manager-api-cache:";
@@ -40,7 +48,10 @@ const MUTATING_PATHS = new Set([
   "/api/admin/staff/set-pin",
   "/api/admin/staff/set-active",
   "/api/admin/tv-message/push",
-  "/api/admin/tv-message/clear"
+  "/api/admin/tv-message/clear",
+  "/api/waitlist/entries/create",
+  "/api/waitlist/entries/remove",
+  "/api/waitlist/games/save"
 ]);
 
 const inFlightReads = new Map<string, Promise<unknown>>();
@@ -196,6 +207,12 @@ export const api = {
   },
   cachedAdminBootstrap(): AdminBootstrapData | null {
     return readCachedData<AdminBootstrapData>("/api/bootstrap/admin");
+  },
+  cachedWaitlistBootstrap(): WaitlistBootstrapData | null {
+    return readCachedData<WaitlistBootstrapData>("/api/waitlist/bootstrap");
+  },
+  cachedWaitlistBoard(): WaitlistBoardData | null {
+    return readCachedData<WaitlistBoardData>("/api/waitlist/board");
   },
   verifyPin(staffName: string, pin: string): Promise<StaffSession> {
     if (!API_BASE_URL) {
@@ -427,6 +444,50 @@ export const api = {
     }
 
     return request<TvMessage>("/api/admin/tv-message/clear", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  waitlistBootstrap(options?: RequestOptions): Promise<WaitlistBootstrapData> {
+    if (!API_BASE_URL) {
+      return mockWaitlistApi.waitlistBootstrap();
+    }
+
+    return request<WaitlistBootstrapData>("/api/waitlist/bootstrap", undefined, options);
+  },
+  waitlistBoard(options?: RequestOptions): Promise<WaitlistBoardData> {
+    if (!API_BASE_URL) {
+      return mockWaitlistApi.waitlistBoard();
+    }
+
+    return request<WaitlistBoardData>("/api/waitlist/board", undefined, options);
+  },
+  createWaitlistEntries(payload: CreateWaitlistEntriesPayload): Promise<WaitlistEntry[]> {
+    if (!API_BASE_URL) {
+      return mockWaitlistApi.createWaitlistEntries(payload);
+    }
+
+    return request<WaitlistEntry[]>("/api/waitlist/entries/create", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  removeWaitlistEntry(payload: RemoveWaitlistEntryPayload): Promise<WaitlistEntry> {
+    if (!API_BASE_URL) {
+      return mockWaitlistApi.removeWaitlistEntry(payload);
+    }
+
+    return request<WaitlistEntry>("/api/waitlist/entries/remove", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  saveWaitlistGame(payload: SaveWaitlistGamePayload): Promise<WaitlistGame> {
+    if (!API_BASE_URL) {
+      return mockWaitlistApi.saveWaitlistGame(payload);
+    }
+
+    return request<WaitlistGame>("/api/waitlist/games/save", {
       method: "POST",
       body: JSON.stringify(payload)
     });

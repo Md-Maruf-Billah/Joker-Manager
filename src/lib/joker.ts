@@ -83,13 +83,13 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function id(prefix: string) {
+export function id(prefix: string) {
   const stamp = Date.now().toString(36).toUpperCase();
   const suffix = Math.random().toString(36).slice(2, 7).toUpperCase();
   return `${prefix}_${stamp}_${suffix}`;
 }
 
-function audit(
+export function audit(
   staffName: string,
   role: Role,
   action: AuditLogEntry["action"],

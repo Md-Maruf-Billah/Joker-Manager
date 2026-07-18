@@ -82,13 +82,16 @@ export type AuditLogEntry = {
     | "SET_STAFF_PIN"
     | "SET_STAFF_ACTIVE"
     | "PUSH_TV_ANNOUNCEMENT"
-    | "CLEAR_TV_ANNOUNCEMENT";
+    | "CLEAR_TV_ANNOUNCEMENT"
+    | "CREATE_WAITLIST_ENTRY"
+    | "REMOVE_WAITLIST_ENTRY"
+    | "SAVE_WAITLIST_GAME";
   recordId: string;
   fieldChanged: string;
   oldValue: string;
   newValue: string;
   reason: string;
-  source: "dashboard" | "admin" | "api";
+  source: "dashboard" | "admin" | "api" | "waitlist";
 };
 
 export type StaffMember = {
@@ -282,6 +285,84 @@ export type PushTvAnnouncementPayload = {
 };
 
 export type ClearTvAnnouncementPayload = {
+  staffName: string;
+  pin: string;
+};
+
+export type WaitlistColorTag = "red" | "teal" | "green" | "gold" | "burgundy";
+
+export type WaitlistGame = {
+  gameId: string;
+  gameName: string;
+  colorTag: WaitlistColorTag;
+  activeTables: string;
+  sortOrder: number;
+  active: boolean;
+};
+
+export type WaitlistStatus = "Waiting" | "Removed";
+
+export type WaitlistEntry = {
+  entryId: string;
+  playerName: string;
+  gameId: string;
+  status: WaitlistStatus;
+  reason: string;
+  addedAt: string;
+  updatedAt: string;
+  staffName: string;
+};
+
+export type WaitlistData = {
+  games: WaitlistGame[];
+  entries: WaitlistEntry[];
+  auditLog: AuditLogEntry[];
+};
+
+export type WaitlistBoardEntry = {
+  entryId: string;
+  playerName: string;
+  addedAt: string;
+};
+
+export type WaitlistBoardColumn = {
+  game: WaitlistGame;
+  waiting: WaitlistBoardEntry[];
+  waitingCount: number;
+};
+
+export type WaitlistBoardData = {
+  columns: WaitlistBoardColumn[];
+  totalWaiting: number;
+  refreshedAt: string;
+};
+
+export type WaitlistBootstrapData = {
+  games: WaitlistGame[];
+  board: WaitlistBoardData;
+};
+
+export type CreateWaitlistEntriesPayload = {
+  playerName: string;
+  gameIds: string[];
+  staffName: string;
+  pin: string;
+};
+
+export type RemoveWaitlistEntryPayload = {
+  entryId: string;
+  reason?: string;
+  staffName: string;
+  pin: string;
+};
+
+export type SaveWaitlistGamePayload = {
+  gameId?: string;
+  gameName: string;
+  colorTag: WaitlistColorTag;
+  activeTables: string;
+  sortOrder: number;
+  active: boolean;
   staffName: string;
   pin: string;
 };

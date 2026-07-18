@@ -12,6 +12,8 @@ const DrawResultPage = lazy(() => import("./pages/DrawResultPage").then((m) => (
 const HistoryPage = lazy(() => import("./pages/HistoryPage").then((m) => ({ default: m.HistoryPage })));
 const AdminPage = lazy(() => import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })));
 const TvDisplayPage = lazy(() => import("./pages/TvDisplayPage").then((m) => ({ default: m.TvDisplayPage })));
+const WaitlistPage = lazy(() => import("./pages/WaitlistPage").then((m) => ({ default: m.WaitlistPage })));
+const WaitlistTvPage = lazy(() => import("./pages/WaitlistTvPage").then((m) => ({ default: m.WaitlistTvPage })));
 
 function RouteFallback() {
   return (
@@ -47,12 +49,14 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage onLogin={setSession} />} />
         <Route path="/tv" element={<TvDisplayPage />} />
+        <Route path="/waitlist-tv" element={<WaitlistTvPage />} />
         <Route element={<ProtectedRoutes session={session} onLogout={() => setSession(null)} />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/add-tournament" element={<AddTournamentPage />} />
           <Route path="/draw-result" element={<DrawResultPage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/waitlist" element={<WaitlistPage />} />
         </Route>
         <Route path="*" element={<Navigate to={session ? "/dashboard" : "/login"} replace />} />
       </Routes>
