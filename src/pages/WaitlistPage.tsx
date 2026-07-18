@@ -499,7 +499,9 @@ export function WaitlistPage() {
                     <div className="px-[26px] py-5 text-sm text-muted">No one waiting for this game.</div>
                   ) : (
                     <div className="divide-y divide-black/[0.06]">
-                      {column.waiting.map((entry, index) => (
+                      {column.waiting.map((entry, index) => {
+                        const canSeat = index === 0;
+                        return (
                         <div
                           key={entry.entryId}
                           draggable={reorderEnabled}
@@ -522,9 +524,13 @@ export function WaitlistPage() {
                           <span className="flex-1 truncate font-semibold text-ink">{entry.playerName}</span>
                           <button
                             type="button"
-                            onClick={() => void handleSeat(entry.entryId)}
-                            title="Mark seated"
-                            className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg text-success transition-all duration-150 hover:bg-success/[0.12] active:scale-90"
+                            onClick={() => canSeat && void handleSeat(entry.entryId)}
+                            disabled={!canSeat}
+                            title={canSeat ? "Mark seated" : "Seat the top of the waitlist first"}
+                            className={clsx(
+                              "grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg transition-all duration-150 active:scale-90",
+                              canSeat ? "text-success hover:bg-success/[0.12]" : "cursor-not-allowed text-black/15"
+                            )}
                           >
                             <Armchair className="h-4 w-4" />
                           </button>
@@ -537,7 +543,8 @@ export function WaitlistPage() {
                             <X className="h-4 w-4" />
                           </button>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                   {column.seatedCount > 0 ? (

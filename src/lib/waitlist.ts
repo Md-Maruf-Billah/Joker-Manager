@@ -190,6 +190,13 @@ export function markEntrySeated(
     throw appError("JM-WL-010", "Entry is not currently waiting.");
   }
 
+  const first = data.entries
+    .filter((e) => e.gameId === entry.gameId && e.status === "Waiting")
+    .sort((a, b) => a.sortIndex - b.sortIndex)[0];
+  if (first && first.entryId !== entry.entryId) {
+    throw appError("JM-WL-012", `${first.playerName} is next in line and must be seated first.`);
+  }
+
   entry.status = "Seated";
   entry.updatedAt = nowIso();
   data.auditLog.push(

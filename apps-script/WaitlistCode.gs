@@ -281,6 +281,14 @@ function markEntrySeated_(body) {
     throw new Error("[JM-WL-010] Entry is not currently waiting.");
   }
 
+  const waitingForGame = getWaitlistObjects_("Waitlist_Entries")
+    .filter(function (r) { return r.GameID === row.GameID && r.Status === "Waiting"; })
+    .sort(function (a, b) { return Number(a.SortIndex || 0) - Number(b.SortIndex || 0); });
+  const first = waitingForGame[0];
+  if (first && first.EntryID !== body.entryId) {
+    throw new Error("[JM-WL-012] " + first.PlayerName + " is next in line and must be seated first.");
+  }
+
   const now = new Date();
   updateWaitlistObjectByKey_("Waitlist_Entries", "EntryID", body.entryId, { Status: "Seated", UpdatedAt: now });
   writeWaitlistAudit_(staffName, "MARK_ENTRY_SEATED", body.entryId, "status", "Waiting", "Seated", "Marked seated");

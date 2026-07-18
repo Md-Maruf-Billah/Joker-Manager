@@ -160,6 +160,32 @@ describe("markEntrySeated", () => {
     markEntrySeated(data, { entryId: entry.entryId, staffName: "staff" }, staff);
     expect(() => markEntrySeated(data, { entryId: entry.entryId, staffName: "staff" }, staff)).toThrow("[JM-WL-010]");
   });
+
+  it("rejects seating someone who isn't at the top of that game's waitlist", () => {
+    const data = freshWaitlistData();
+    const [first] = createWaitlistEntries(data, { playerName: "Amit", gameIds: ["G1"], staffName: "staff" }, staff);
+    const [second] = createWaitlistEntries(data, { playerName: "Ben", gameIds: ["G1"], staffName: "staff" }, staff);
+    expect(() => markEntrySeated(data, { entryId: second.entryId, staffName: "staff" }, staff)).toThrow("[JM-WL-012]");
+    expect(first.status).toBe("Waiting");
+    expect(second.status).toBe("Waiting");
+  });
+
+  it("allows seating the top entry, then the next one becomes seatable", () => {
+    const data = freshWaitlistData();
+    const [first] = createWaitlistEntries(data, { playerName: "Amit", gameIds: ["G1"], staffName: "staff" }, staff);
+    const [second] = createWaitlistEntries(data, { playerName: "Ben", gameIds: ["G1"], staffName: "staff" }, staff);
+    markEntrySeated(data, { entryId: first.entryId, staffName: "staff" }, staff);
+    const seated = markEntrySeated(data, { entryId: second.entryId, staffName: "staff" }, staff);
+    expect(seated.status).toBe("Seated");
+  });
+
+  it("doesn't block seating based on order across different games", () => {
+    const data = freshWaitlistData();
+    createWaitlistEntries(data, { playerName: "Amit", gameIds: ["G1"], staffName: "staff" }, staff);
+    const [otherGameEntry] = createWaitlistEntries(data, { playerName: "Cara", gameIds: ["G2"], staffName: "staff" }, staff);
+    const seated = markEntrySeated(data, { entryId: otherGameEntry.entryId, staffName: "staff" }, staff);
+    expect(seated.status).toBe("Seated");
+  });
 });
 
 describe("removeWaitlistEntry", () => {
