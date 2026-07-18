@@ -154,7 +154,7 @@ export function WaitlistTvPage() {
               className="mt-[clamp(14px,2.4vh,24px)] font-semibold leading-snug text-[#e6cf9f]"
               style={{ fontSize: "clamp(15px,1.8vw,26px)" }}
             >
-              Ask a floor staff member to join the waitlist.
+              Ask a concierge to join the waitlist.
             </div>
             {data.columns.length ? (
               <div className="mt-[clamp(22px,3.6vh,38px)] flex flex-wrap justify-center gap-[clamp(10px,1.6vw,18px)]">
