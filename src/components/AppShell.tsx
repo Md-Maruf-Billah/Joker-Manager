@@ -21,10 +21,10 @@ const navSections: NavSection[] = [
     ]
   },
   {
-    label: "Waitlist",
+    label: "TLT Waitlist",
     items: [
-      { to: "/waitlist", label: "Waitlist", icon: ListChecks },
-      { to: "/waitlist-tv", label: "Waitlist TV", icon: Tv }
+      { to: "/waitlist", label: "TLT Waitlist", icon: ListChecks },
+      { to: "/waitlist-tv", label: "TLT Waitlist TV", icon: Tv }
     ]
   }
 ];

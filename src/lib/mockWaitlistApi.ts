@@ -1,5 +1,7 @@
 import type {
   CreateWaitlistEntriesPayload,
+  MarkEntrySeatedPayload,
+  ReorderWaitlistEntriesPayload,
   RemoveWaitlistEntryPayload,
   SaveWaitlistGamePayload,
   WaitlistData
@@ -11,8 +13,10 @@ import {
   createWaitlistEntries,
   getWaitlistBoard,
   getWaitlistBootstrap,
+  markEntrySeated,
   normalizeWaitlistData,
   removeWaitlistEntry,
+  reorderWaitlistEntries,
   saveWaitlistGame
 } from "./waitlist";
 
@@ -52,10 +56,18 @@ function withWaitlistData<T>(handler: (data: WaitlistData) => T) {
   return Promise.resolve(clone(result));
 }
 
-// Staff PIN verification happens against the jackpot store, not the waitlist
-// store, since staff accounts are shared across both features (mirroring how
-// the real backend's verifyPin_ reads the one Staff sheet regardless of which
-// route is calling it). This is a read-only cross-store call, never a write.
+// Adding, seating, removing, and reordering are frequent floor actions that
+// no longer require a staff password (matching the real backend, where the
+// Worker also skips its PIN pre-flight for these routes) — the identity is
+// whatever staffName the already-logged-in session sends, no verification.
+function passwordlessStaff(staffName: string) {
+  return { staffName, role: "staff" as const };
+}
+
+// Managing the game list is rarer/more structural, so it keeps requiring a
+// staff password — verified as a read-only cross-store call against the
+// Joker Jackpot store, mirroring how the real Worker verifies it against the
+// Joker Jackpot Apps Script before forwarding to the Waitlist one.
 function verifyStaff(staffName: string, pin: string) {
   return verifyPin(loadMockData(), staffName, pin);
 }
@@ -74,12 +86,20 @@ export const mockWaitlistApi = {
     return withWaitlistData((data) => getWaitlistBoard(data));
   },
   async createWaitlistEntries(payload: CreateWaitlistEntriesPayload) {
-    const staff = verifyStaff(payload.staffName, payload.pin);
+    const staff = passwordlessStaff(payload.staffName);
     return withWaitlistData((data) => createWaitlistEntries(data, payload, staff));
   },
+  async markEntrySeated(payload: MarkEntrySeatedPayload) {
+    const staff = passwordlessStaff(payload.staffName);
+    return withWaitlistData((data) => markEntrySeated(data, payload, staff));
+  },
   async removeWaitlistEntry(payload: RemoveWaitlistEntryPayload) {
-    const staff = verifyStaff(payload.staffName, payload.pin);
+    const staff = passwordlessStaff(payload.staffName);
     return withWaitlistData((data) => removeWaitlistEntry(data, payload, staff));
+  },
+  async reorderWaitlistEntries(payload: ReorderWaitlistEntriesPayload) {
+    const staff = passwordlessStaff(payload.staffName);
+    return withWaitlistData((data) => reorderWaitlistEntries(data, payload, staff));
   },
   async saveWaitlistGame(payload: SaveWaitlistGamePayload) {
     const staff = verifyStaff(payload.staffName, payload.pin);

@@ -12,7 +12,9 @@ import type {
   HistoryBootstrapData,
   JokerData,
   LoginBootstrapData,
+  MarkEntrySeatedPayload,
   PushTvAnnouncementPayload,
+  ReorderWaitlistEntriesPayload,
   RemoveWaitlistEntryPayload,
   SaveWaitlistGamePayload,
   SetStaffActivePayload,
@@ -50,7 +52,9 @@ const MUTATING_PATHS = new Set([
   "/api/admin/tv-message/push",
   "/api/admin/tv-message/clear",
   "/api/waitlist/entries/create",
+  "/api/waitlist/entries/seat",
   "/api/waitlist/entries/remove",
+  "/api/waitlist/entries/reorder",
   "/api/waitlist/games/save"
 ]);
 
@@ -472,12 +476,32 @@ export const api = {
       body: JSON.stringify(payload)
     });
   },
+  markEntrySeated(payload: MarkEntrySeatedPayload): Promise<WaitlistEntry> {
+    if (!API_BASE_URL) {
+      return mockWaitlistApi.markEntrySeated(payload);
+    }
+
+    return request<WaitlistEntry>("/api/waitlist/entries/seat", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
   removeWaitlistEntry(payload: RemoveWaitlistEntryPayload): Promise<WaitlistEntry> {
     if (!API_BASE_URL) {
       return mockWaitlistApi.removeWaitlistEntry(payload);
     }
 
     return request<WaitlistEntry>("/api/waitlist/entries/remove", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  reorderWaitlistEntries(payload: ReorderWaitlistEntriesPayload): Promise<WaitlistEntry[]> {
+    if (!API_BASE_URL) {
+      return mockWaitlistApi.reorderWaitlistEntries(payload);
+    }
+
+    return request<WaitlistEntry[]>("/api/waitlist/entries/reorder", {
       method: "POST",
       body: JSON.stringify(payload)
     });

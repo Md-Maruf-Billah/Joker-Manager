@@ -84,7 +84,9 @@ export type AuditLogEntry = {
     | "PUSH_TV_ANNOUNCEMENT"
     | "CLEAR_TV_ANNOUNCEMENT"
     | "CREATE_WAITLIST_ENTRY"
+    | "MARK_ENTRY_SEATED"
     | "REMOVE_WAITLIST_ENTRY"
+    | "REORDER_WAITLIST_ENTRIES"
     | "SAVE_WAITLIST_GAME";
   recordId: string;
   fieldChanged: string;
@@ -295,12 +297,13 @@ export type WaitlistGame = {
   gameId: string;
   gameName: string;
   colorTag: WaitlistColorTag;
-  activeTables: string;
+  running: boolean;
+  tableNumbers: string;
   sortOrder: number;
   active: boolean;
 };
 
-export type WaitlistStatus = "Waiting" | "Removed";
+export type WaitlistStatus = "Waiting" | "Seated" | "Removed";
 
 export type WaitlistEntry = {
   entryId: string;
@@ -308,6 +311,7 @@ export type WaitlistEntry = {
   gameId: string;
   status: WaitlistStatus;
   reason: string;
+  sortIndex: number;
   addedAt: string;
   updatedAt: string;
   staffName: string;
@@ -329,6 +333,8 @@ export type WaitlistBoardColumn = {
   game: WaitlistGame;
   waiting: WaitlistBoardEntry[];
   waitingCount: number;
+  seated: WaitlistBoardEntry[];
+  seatedCount: number;
 };
 
 export type WaitlistBoardData = {
@@ -346,22 +352,31 @@ export type CreateWaitlistEntriesPayload = {
   playerName: string;
   gameIds: string[];
   staffName: string;
-  pin: string;
+};
+
+export type MarkEntrySeatedPayload = {
+  entryId: string;
+  staffName: string;
 };
 
 export type RemoveWaitlistEntryPayload = {
   entryId: string;
   reason?: string;
   staffName: string;
-  pin: string;
+};
+
+export type ReorderWaitlistEntriesPayload = {
+  gameId: string;
+  entryIds: string[];
+  staffName: string;
 };
 
 export type SaveWaitlistGamePayload = {
   gameId?: string;
   gameName: string;
   colorTag: WaitlistColorTag;
-  activeTables: string;
-  sortOrder: number;
+  running: boolean;
+  tableNumbers: string;
   active: boolean;
   staffName: string;
   pin: string;

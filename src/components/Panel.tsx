@@ -1,15 +1,20 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { clsx } from "clsx";
 
 export function Panel({
   children,
-  className
+  className,
+  style
 }: {
   children: ReactNode;
   className?: string;
+  style?: CSSProperties;
 }) {
   return (
-    <section className={clsx("min-w-0 overflow-hidden rounded-2xl border border-black/[0.07] bg-card shadow-card", className)}>
+    <section
+      className={clsx("min-w-0 overflow-hidden rounded-2xl border border-black/[0.07] bg-card shadow-card", className)}
+      style={style}
+    >
       {children}
     </section>
   );

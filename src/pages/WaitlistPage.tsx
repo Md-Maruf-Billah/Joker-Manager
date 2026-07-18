@@ -1,7 +1,8 @@
-import { Fragment, FormEvent, useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, PlusCircle, Save, UserPlus, UserMinus, X } from "lucide-react";
+import { Fragment, FormEvent, DragEvent, useEffect, useState } from "react";
+import { clsx } from "clsx";
+import { Armchair, ChevronDown, ChevronUp, GripVertical, Monitor, PlusCircle, Save, UserPlus, X } from "lucide-react";
 import { PageTitle } from "../components/AppShell";
-import { Button } from "../components/Button";
+import { Button, ButtonLink } from "../components/Button";
 import { FormField, TextInput } from "../components/FormField";
 import { Panel, PanelHeader } from "../components/Panel";
 import { SelectField } from "../components/SelectField";
@@ -10,8 +11,8 @@ import { StatusMessage } from "../components/StatusMessage";
 import { api } from "../lib/api";
 import { errorMessage } from "../lib/errors";
 import { useSession } from "../lib/session";
-import { WAITLIST_COLOR_TAGS } from "../lib/waitlist";
-import type { WaitlistBoardData, WaitlistColorTag, WaitlistGame } from "../types";
+import { WAITLIST_COLOR_TAGS, WAITLIST_COLOR_THEME } from "../lib/waitlist";
+import type { WaitlistBoardColumn, WaitlistBoardData, WaitlistColorTag, WaitlistGame } from "../types";
 
 const COLOR_TAG_LABELS: Record<WaitlistColorTag, string> = {
   red: "Red",
@@ -20,6 +21,18 @@ const COLOR_TAG_LABELS: Record<WaitlistColorTag, string> = {
   gold: "Gold",
   burgundy: "Burgundy"
 };
+
+function moveWithinColumn(column: WaitlistBoardColumn, fromId: string, toId: string): WaitlistBoardColumn {
+  const items = [...column.waiting];
+  const fromIndex = items.findIndex((entry) => entry.entryId === fromId);
+  const toIndex = items.findIndex((entry) => entry.entryId === toId);
+  if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
+    return column;
+  }
+  const [moved] = items.splice(fromIndex, 1);
+  items.splice(toIndex, 0, moved);
+  return { ...column, waiting: items };
+}
 
 export function WaitlistPage() {
   const session = useSession();
@@ -30,23 +43,18 @@ export function WaitlistPage() {
 
   const [playerName, setPlayerName] = useState("");
   const [selectedGameIds, setSelectedGameIds] = useState<string[]>([]);
-  const [addPin, setAddPin] = useState("");
   const [addError, setAddError] = useState("");
   const [addNotice, setAddNotice] = useState("");
   const [addLoading, setAddLoading] = useState(false);
-
-  const [removeEntryId, setRemoveEntryId] = useState<string | null>(null);
-  const [removeReason, setRemoveReason] = useState("");
-  const [removePin, setRemovePin] = useState("");
-  const [removeError, setRemoveError] = useState("");
-  const [removeLoading, setRemoveLoading] = useState(false);
+  const [rowActionError, setRowActionError] = useState("");
+  const [draggedEntryId, setDraggedEntryId] = useState<string | null>(null);
 
   const [showManageGames, setShowManageGames] = useState(false);
   const [selectedGameEditId, setSelectedGameEditId] = useState("__new");
   const [gameName, setGameName] = useState("");
   const [gameColorTag, setGameColorTag] = useState<WaitlistColorTag>("red");
-  const [gameActiveTables, setGameActiveTables] = useState("");
-  const [gameSortOrder, setGameSortOrder] = useState("1");
+  const [gameRunning, setGameRunning] = useState(false);
+  const [gameTableNumbers, setGameTableNumbers] = useState("");
   const [gameActive, setGameActive] = useState("true");
   const [gamePin, setGamePin] = useState("");
   const [gameError, setGameError] = useState("");
@@ -81,13 +89,11 @@ export function WaitlistPage() {
       await api.createWaitlistEntries({
         playerName,
         gameIds: selectedGameIds,
-        staffName: session.staffName,
-        pin: addPin
+        staffName: session.staffName
       });
       setAddNotice(`${playerName} added to the waitlist.`);
       setPlayerName("");
       setSelectedGameIds([]);
-      setAddPin("");
       await load({ bypassCache: true });
     } catch (err) {
       setAddError(errorMessage(err, "JM-WL-900", "Could not add to waitlist."));
@@ -96,38 +102,56 @@ export function WaitlistPage() {
     }
   }
 
-  function openRemoveRow(entryId: string) {
-    setRemoveEntryId(entryId);
-    setRemoveReason("");
-    setRemovePin("");
-    setRemoveError("");
-  }
-
-  function closeRemoveRow() {
-    setRemoveEntryId(null);
-    setRemoveReason("");
-    setRemovePin("");
-    setRemoveError("");
-  }
-
-  async function submitRemove(event: FormEvent, entryId: string) {
-    event.preventDefault();
-    setRemoveError("");
-    setRemoveLoading(true);
-
+  async function handleSeat(entryId: string) {
+    setRowActionError("");
     try {
-      await api.removeWaitlistEntry({
-        entryId,
-        reason: removeReason,
-        staffName: session.staffName,
-        pin: removePin
-      });
-      closeRemoveRow();
+      await api.markEntrySeated({ entryId, staffName: session.staffName });
       await load({ bypassCache: true });
     } catch (err) {
-      setRemoveError(errorMessage(err, "JM-WL-901", "Could not remove entry."));
-    } finally {
-      setRemoveLoading(false);
+      setRowActionError(errorMessage(err, "JM-WL-901", "Could not mark as seated."));
+    }
+  }
+
+  async function handleRemove(entryId: string) {
+    setRowActionError("");
+    try {
+      await api.removeWaitlistEntry({ entryId, staffName: session.staffName });
+      await load({ bypassCache: true });
+    } catch (err) {
+      setRowActionError(errorMessage(err, "JM-WL-902", "Could not remove entry."));
+    }
+  }
+
+  function handleDragOver(event: DragEvent, gameId: string, overEntryId: string) {
+    event.preventDefault();
+    if (!draggedEntryId || draggedEntryId === overEntryId) {
+      return;
+    }
+    setBoard((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        columns: current.columns.map((column) =>
+          column.game.gameId === gameId ? moveWithinColumn(column, draggedEntryId, overEntryId) : column
+        )
+      };
+    });
+  }
+
+  async function handleDrop(gameId: string) {
+    const column = board?.columns.find((c) => c.game.gameId === gameId);
+    setDraggedEntryId(null);
+    if (!column) return;
+
+    try {
+      await api.reorderWaitlistEntries({
+        gameId,
+        entryIds: column.waiting.map((entry) => entry.entryId),
+        staffName: session.staffName
+      });
+    } catch (err) {
+      setRowActionError(errorMessage(err, "JM-WL-903", "Could not reorder the waitlist."));
+      await load({ bypassCache: true });
     }
   }
 
@@ -135,8 +159,8 @@ export function WaitlistPage() {
     setSelectedGameEditId("__new");
     setGameName("");
     setGameColorTag("red");
-    setGameActiveTables("");
-    setGameSortOrder(String(games.length + 1));
+    setGameRunning(false);
+    setGameTableNumbers("");
     setGameActive("true");
     setGamePin("");
   }
@@ -155,8 +179,8 @@ export function WaitlistPage() {
 
     setGameName(game.gameName);
     setGameColorTag(game.colorTag);
-    setGameActiveTables(game.activeTables);
-    setGameSortOrder(String(game.sortOrder));
+    setGameRunning(game.running);
+    setGameTableNumbers(game.tableNumbers);
     setGameActive(String(game.active));
   }
 
@@ -171,8 +195,8 @@ export function WaitlistPage() {
         gameId: selectedGameEditId === "__new" ? undefined : selectedGameEditId,
         gameName,
         colorTag: gameColorTag,
-        activeTables: gameActiveTables,
-        sortOrder: Number(gameSortOrder),
+        running: gameRunning,
+        tableNumbers: gameTableNumbers,
         active: gameActive === "true",
         staffName: session.staffName,
         pin: gamePin
@@ -181,7 +205,7 @@ export function WaitlistPage() {
       resetGameForm();
       await load({ bypassCache: true });
     } catch (err) {
-      setGameError(errorMessage(err, "JM-WL-902", "Could not save game."));
+      setGameError(errorMessage(err, "JM-WL-904", "Could not save game."));
     } finally {
       setGameLoading(false);
     }
@@ -191,12 +215,20 @@ export function WaitlistPage() {
 
   return (
     <>
-      <PageTitle title="Waitlist">
-        Record player interest for Time Limit Tournaments cash games. Shows live on the Waitlist TV.
+      <PageTitle
+        title="TLT Waitlist"
+        action={
+          <ButtonLink to="/waitlist-tv" variant="secondary" target="_blank">
+            <Monitor className="h-[15px] w-[15px]" />
+            Open TV
+          </ButtonLink>
+        }
+      >
+        Record player interest for Time Limit Tournaments. Shows live on the TLT Waitlist TV.
       </PageTitle>
-      {loadError ? <div className="mb-4"><StatusMessage tone="error">{loadError}</StatusMessage></div> : null}
+      {loadError ? <div className="mb-5"><StatusMessage tone="error">{loadError}</StatusMessage></div> : null}
       {!board ? (
-        <div className="grid gap-[18px] xl:grid-cols-2">
+        <div className="grid gap-5 xl:grid-cols-2">
           <SkeletonPanel rows={3} />
           <SkeletonPanel rows={3} />
         </div>
@@ -204,104 +236,140 @@ export function WaitlistPage() {
         <>
           <Panel>
             <PanelHeader title="Add to waitlist">Select every game this player is interested in.</PanelHeader>
-            <form className="grid gap-4 p-[24px] px-[26px]" onSubmit={submitAdd}>
+            <form className="grid gap-4 p-[26px]" onSubmit={submitAdd}>
               <FormField label="Player name">
                 <TextInput value={playerName} onChange={(event) => setPlayerName(event.target.value)} />
               </FormField>
               <FormField label="Games">
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {activeGames.map((game) => (
-                    <label
-                      key={game.gameId}
-                      className="flex min-h-[42px] items-center gap-2.5 rounded-[10px] border border-black/[0.14] bg-field px-3.5 text-sm font-semibold text-ink"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedGameIds.includes(game.gameId)}
-                        onChange={() => toggleGameId(game.gameId)}
-                        className="h-4 w-4 accent-brand-red"
-                      />
-                      {game.gameName}
-                    </label>
-                  ))}
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  {activeGames.map((game) => {
+                    const theme = WAITLIST_COLOR_THEME[game.colorTag];
+                    const checked = selectedGameIds.includes(game.gameId);
+                    return (
+                      <label
+                        key={game.gameId}
+                        className="flex min-h-[46px] items-center gap-2.5 rounded-[10px] border px-3.5 text-sm font-semibold text-ink transition-colors"
+                        style={{
+                          borderColor: checked ? theme.accent : "rgba(0,0,0,0.14)",
+                          background: checked ? theme.tint : "var(--tw-color-field, #F5F5F6)"
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleGameId(game.gameId)}
+                          className="h-4 w-4 flex-shrink-0"
+                          style={{ accentColor: theme.accent }}
+                        />
+                        <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ background: theme.accent }} />
+                        {game.gameName}
+                      </label>
+                    );
+                  })}
                   {activeGames.length === 0 ? (
                     <div className="text-sm text-muted sm:col-span-2">No active games yet. Add one below.</div>
                   ) : null}
                 </div>
               </FormField>
-              <FormField label="Staff password">
-                <TextInput value={addPin} onChange={(event) => setAddPin(event.target.value)} type="password" />
-              </FormField>
               {addError ? <StatusMessage tone="error">{addError}</StatusMessage> : null}
               {addNotice ? <StatusMessage tone="success">{addNotice}</StatusMessage> : null}
-              <Button type="submit" disabled={!playerName.trim() || !selectedGameIds.length || !addPin || addLoading}>
+              <Button type="submit" disabled={!playerName.trim() || !selectedGameIds.length || addLoading}>
                 <UserPlus className="h-4 w-4" />
                 {addLoading ? "Adding..." : "Add to waitlist"}
               </Button>
             </form>
           </Panel>
 
-          <div className="mt-[18px] grid gap-[18px] xl:grid-cols-2">
-            {board.columns.map((column) => (
-              <Panel key={column.game.gameId} className="overflow-hidden">
-                <PanelHeader
-                  title={column.game.gameName}
-                  action={<span className="text-xs font-semibold text-muted">{column.waitingCount} waiting</span>}
-                >
-                  {column.game.activeTables ? column.game.activeTables : "Interest only — no tables running yet"}
-                </PanelHeader>
-                {column.waiting.length === 0 ? (
-                  <div className="px-[26px] py-5 text-sm text-muted">No one waiting for this game.</div>
-                ) : (
-                  <div className="divide-y divide-black/[0.06]">
-                    {column.waiting.map((entry) => {
-                      const expanded = removeEntryId === entry.entryId;
-                      return (
-                        <Fragment key={entry.entryId}>
-                          <div className="flex items-center justify-between gap-3 px-[26px] py-3.5">
-                            <span className="font-semibold text-ink">{entry.playerName}</span>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              className="min-h-8 px-2.5 text-xs"
-                              onClick={() => (expanded ? closeRemoveRow() : openRemoveRow(entry.entryId))}
-                            >
-                              <UserMinus className="h-3.5 w-3.5" />
-                              Remove
-                            </Button>
-                          </div>
-                          {expanded ? (
-                            <div className="bg-black/[0.02] px-[26px] py-4">
-                              <form className="grid gap-3 sm:grid-cols-3" onSubmit={(event) => void submitRemove(event, entry.entryId)}>
-                                <FormField label="Reason (optional)">
-                                  <TextInput value={removeReason} onChange={(event) => setRemoveReason(event.target.value)} placeholder="Seated" />
-                                </FormField>
-                                <FormField label="Staff password">
-                                  <TextInput value={removePin} onChange={(event) => setRemovePin(event.target.value)} type="password" />
-                                </FormField>
-                                <div className="flex items-end gap-2">
-                                  <Button type="submit" variant="danger" disabled={!removePin || removeLoading}>
-                                    {removeLoading ? "Removing..." : "Confirm remove"}
-                                  </Button>
-                                  <Button type="button" variant="ghost" onClick={closeRemoveRow}>
-                                    <X className="h-4 w-4" />
-                                    Cancel
-                                  </Button>
-                                </div>
-                                {removeError ? <div className="sm:col-span-3"><StatusMessage tone="error">{removeError}</StatusMessage></div> : null}
-                              </form>
-                            </div>
-                          ) : null}
-                        </Fragment>
-                      );
-                    })}
+          {rowActionError ? <div className="mt-5"><StatusMessage tone="error">{rowActionError}</StatusMessage></div> : null}
+
+          <div className="mt-5 grid gap-5 xl:grid-cols-2">
+            {board.columns.map((column) => {
+              const theme = WAITLIST_COLOR_THEME[column.game.colorTag];
+              return (
+                <Panel key={column.game.gameId} className="overflow-hidden" style={{ borderTopColor: theme.accent, borderTopWidth: "3px" }}>
+                  <PanelHeader
+                    title={column.game.gameName}
+                    action={<span className="text-xs font-semibold text-muted">{column.waitingCount} waiting</span>}
+                  >
+                    {column.game.running ? (
+                      <span className="inline-flex items-center gap-1.5 font-bold" style={{ color: theme.accent }}>
+                        <span className="h-1.5 w-1.5 rounded-full" style={{ background: theme.accent }} />
+                        RUNNING{column.game.tableNumbers ? ` · Tables ${column.game.tableNumbers}` : ""}
+                      </span>
+                    ) : (
+                      "Interest — no tables running yet"
+                    )}
+                  </PanelHeader>
+                  <div className="border-b border-black/[0.06] px-[26px] pb-2.5 pt-3.5 text-[11px] font-bold uppercase tracking-[0.08em] text-faint">
+                    Waitlist
                   </div>
-                )}
-              </Panel>
-            ))}
+                  {column.waiting.length === 0 ? (
+                    <div className="px-[26px] py-5 text-sm text-muted">No one waiting for this game.</div>
+                  ) : (
+                    <div className="divide-y divide-black/[0.06]">
+                      {column.waiting.map((entry) => (
+                        <div
+                          key={entry.entryId}
+                          draggable
+                          onDragStart={() => setDraggedEntryId(entry.entryId)}
+                          onDragOver={(event) => handleDragOver(event, column.game.gameId, entry.entryId)}
+                          onDrop={() => void handleDrop(column.game.gameId)}
+                          onDragEnd={() => setDraggedEntryId(null)}
+                          className={clsx(
+                            "flex items-center gap-2.5 px-[26px] py-3 transition-all duration-150",
+                            draggedEntryId === entry.entryId ? "opacity-40" : "opacity-100"
+                          )}
+                        >
+                          <GripVertical className="h-4 w-4 flex-shrink-0 cursor-grab text-faint active:cursor-grabbing" />
+                          <span className="flex-1 truncate font-semibold text-ink">{entry.playerName}</span>
+                          <button
+                            type="button"
+                            onClick={() => void handleSeat(entry.entryId)}
+                            title="Mark seated"
+                            className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg text-success transition-all duration-150 hover:bg-success/[0.12] active:scale-90"
+                          >
+                            <Armchair className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleRemove(entry.entryId)}
+                            title="Remove"
+                            className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg text-brand-danger transition-all duration-150 hover:bg-brand-danger/[0.12] active:scale-90"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {column.seatedCount > 0 ? (
+                    <div className="border-t border-black/[0.06] bg-black/[0.015] px-[26px] py-3.5">
+                      <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.08em] text-faint">
+                        Seated ({column.seatedCount})
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        {column.seated.map((entry) => (
+                          <div key={entry.entryId} className="flex items-center gap-2.5">
+                            <span className="flex-1 truncate text-sm text-muted">{entry.playerName}</span>
+                            <button
+                              type="button"
+                              onClick={() => void handleRemove(entry.entryId)}
+                              title="Remove"
+                              className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-lg text-faint transition-all duration-150 hover:bg-black/[0.06] hover:text-brand-danger active:scale-90"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </Panel>
+              );
+            })}
           </div>
 
-          <Panel className="mt-[18px]">
+          <Panel className="mt-5">
             <PanelHeader
               title="Manage games"
               action={
@@ -314,7 +382,7 @@ export function WaitlistPage() {
               Add or edit the game types offered on the waitlist and TV board.
             </PanelHeader>
             {showManageGames ? (
-              <div className="p-[24px] px-[26px]">
+              <div className="p-[26px]">
                 <form className="grid gap-4" onSubmit={submitGame}>
                   <SelectField
                     label="Edit existing"
@@ -329,29 +397,55 @@ export function WaitlistPage() {
                       }))
                     ]}
                   />
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <FormField label="Game name">
-                      <TextInput value={gameName} onChange={(event) => setGameName(event.target.value)} placeholder="$1/3 NLHE" />
-                    </FormField>
+                  <FormField label="Game name">
+                    <TextInput value={gameName} onChange={(event) => setGameName(event.target.value)} placeholder="$1/3 NLHE" />
+                  </FormField>
+                  <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
                     <SelectField
                       label="Color tag"
                       value={gameColorTag}
                       onValueChange={(value) => setGameColorTag(value as WaitlistColorTag)}
                       options={WAITLIST_COLOR_TAGS.map((tag) => ({ value: tag, label: COLOR_TAG_LABELS[tag] }))}
                     />
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <div className="sm:col-span-2">
-                      <FormField label="Active tables note" hint="Shown on the TV board, e.g. 2 tables running">
-                        <TextInput value={gameActiveTables} onChange={(event) => setGameActiveTables(event.target.value)} />
-                      </FormField>
+                    <div className="flex items-end pb-[3px]">
+                      <div
+                        className="h-[42px] w-[42px] flex-shrink-0 rounded-[10px] border border-black/10"
+                        style={{ background: WAITLIST_COLOR_THEME[gameColorTag].accent }}
+                        title={`${COLOR_TAG_LABELS[gameColorTag]} preview`}
+                      />
                     </div>
-                    <FormField label="Sort order">
-                      <TextInput value={gameSortOrder} onChange={(event) => setGameSortOrder(event.target.value)} inputMode="numeric" />
-                    </FormField>
                   </div>
+                  <FormField label="Status">
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setGameRunning(false)}
+                        className={clsx(
+                          "min-h-[42px] rounded-[10px] border text-sm font-bold transition-all duration-150",
+                          !gameRunning ? "border-ink bg-ink text-white" : "border-black/[0.14] bg-field text-muted hover:bg-black/[0.03]"
+                        )}
+                      >
+                        Interest
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setGameRunning(true)}
+                        className={clsx(
+                          "min-h-[42px] rounded-[10px] border text-sm font-bold transition-all duration-150",
+                          gameRunning ? "border-success bg-success text-white" : "border-black/[0.14] bg-field text-muted hover:bg-black/[0.03]"
+                        )}
+                      >
+                        Running
+                      </button>
+                    </div>
+                  </FormField>
+                  {gameRunning ? (
+                    <FormField label="Table numbers" hint="Shown on the TV board, e.g. 45, 48">
+                      <TextInput value={gameTableNumbers} onChange={(event) => setGameTableNumbers(event.target.value)} />
+                    </FormField>
+                  ) : null}
                   <SelectField
-                    label="Status"
+                    label="Active"
                     value={gameActive}
                     onValueChange={setGameActive}
                     options={[
@@ -364,7 +458,7 @@ export function WaitlistPage() {
                   </FormField>
                   {gameError ? <StatusMessage tone="error">{gameError}</StatusMessage> : null}
                   {gameNotice ? <StatusMessage tone="success">{gameNotice}</StatusMessage> : null}
-                  <div className="flex gap-2">
+                  <div className="flex gap-2.5">
                     <Button type="submit" disabled={!gameName.trim() || !gamePin || gameLoading}>
                       <Save className="h-4 w-4" />
                       {gameLoading ? "Saving..." : "Save game"}
@@ -375,13 +469,17 @@ export function WaitlistPage() {
                     </Button>
                   </div>
                 </form>
-                <div className="mt-5 divide-y divide-black/[0.06] border-t border-black/[0.06]">
-                  {games.map((game) => (
-                    <div key={game.gameId} className="flex items-center justify-between gap-3 py-3">
-                      <span className="text-sm font-semibold text-ink">{game.gameName}</span>
-                      <span className="text-xs text-muted">{game.active ? "Active" : "Inactive"}</span>
-                    </div>
-                  ))}
+                <div className="mt-6 divide-y divide-black/[0.06] border-t border-black/[0.06]">
+                  {games.map((game) => {
+                    const theme = WAITLIST_COLOR_THEME[game.colorTag];
+                    return (
+                      <div key={game.gameId} className="flex items-center gap-2.5 py-3">
+                        <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ background: theme.accent }} />
+                        <span className="flex-1 text-sm font-semibold text-ink">{game.gameName}</span>
+                        <span className="text-xs text-muted">{game.active ? "Active" : "Inactive"}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ) : null}

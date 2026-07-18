@@ -41,7 +41,9 @@ const routes: Record<string, RouteConfig> = {
   "/api/waitlist/bootstrap": { methods: ["GET"] },
   "/api/waitlist/board": { methods: ["GET"] },
   "/api/waitlist/entries/create": { methods: ["POST"] },
+  "/api/waitlist/entries/seat": { methods: ["POST"] },
   "/api/waitlist/entries/remove": { methods: ["POST"] },
+  "/api/waitlist/entries/reorder": { methods: ["POST"] },
   "/api/waitlist/games/save": { methods: ["POST"] }
 };
 
@@ -49,17 +51,16 @@ const routes: Record<string, RouteConfig> = {
 // Script deployment from Joker Jackpot (own execution-time quota, zero shared
 // data). Staff still log in with one shared password, though: rather than
 // duplicating the Staff roster into the Waitlist sheet (which would drift out
-// of sync), every waitlist WRITE is authenticated here in the Worker by first
-// calling Joker Jackpot's existing, unmodified /api/auth/verify-pin route,
-// and only forwarded to the Waitlist Apps Script once that succeeds. Reads
-// (the board and bootstrap) need no auth and go straight to the Waitlist
-// upstream, same as every other public GET route in this app.
+// of sync), Manage games (the one Waitlist write that's still password-gated)
+// is authenticated here in the Worker by first calling Joker Jackpot's
+// existing, unmodified /api/auth/verify-pin route, and only forwarded to the
+// Waitlist Apps Script once that succeeds. Adding/seating/removing/reordering
+// waitlist entries are frequent floor actions with no password at all — the
+// Worker just forwards whatever staffName the already-logged-in session
+// sends. Reads (the board and bootstrap) need no auth either and go straight
+// to the Waitlist upstream, same as every other public GET route in this app.
 const WAITLIST_PATH_PREFIX = "/api/waitlist/";
-const WAITLIST_AUTH_ROUTES = new Set([
-  "/api/waitlist/entries/create",
-  "/api/waitlist/entries/remove",
-  "/api/waitlist/games/save"
-]);
+const WAITLIST_AUTH_ROUTES = new Set(["/api/waitlist/games/save"]);
 
 type Upstream = { url: string; token: string };
 
@@ -110,7 +111,9 @@ const MUTATING_ROUTES = new Set([
   "/api/admin/tv-message/push",
   "/api/admin/tv-message/clear",
   "/api/waitlist/entries/create",
+  "/api/waitlist/entries/seat",
   "/api/waitlist/entries/remove",
+  "/api/waitlist/entries/reorder",
   "/api/waitlist/games/save"
 ]);
 // The TV display polls every 30s (see TvDisplayPage.tsx). Every poll that lands

@@ -6,16 +6,18 @@
  *   file never reads or writes anything outside its own Sheet.
  * - Its own Apps Script execution-time quota, independent of Joker Jackpot's
  *   (each Google account's Apps Script quota is allocated per script
- *   project). The Waitlist TV board and staff page poll on their own
+ *   project). The TLT Waitlist TV board and staff page poll on their own
  *   schedule; keeping that on a separate project means it can never crowd
  *   out the Joker Jackpot TV/staff screens' own quota, or vice versa.
- * - Staff still log in with the SAME password as Joker Jackpot. Rather than
- *   duplicating the Staff roster here (which would drift out of sync), PIN
- *   verification for every write happens in the Cloudflare Worker: it calls
- *   the Joker Jackpot script's existing, unmodified /api/auth/verify-pin
+ * - Staff still log in with the SAME password as Joker Jackpot for the one
+ *   action that still needs one (Manage games). Adding, seating, removing,
+ *   and reordering entries are frequent floor actions and no longer require
+ *   a password at all — the Worker just forwards whatever staffName the
+ *   already-logged-in session sends. Manage games keeps a password check:
+ *   the Worker calls Joker Jackpot's existing, unmodified /api/auth/verify-pin
  *   route first, and only forwards the request here once that succeeds. So
- *   every function below trusts body.staffName as already-verified — there
- *   is no PasswordHash/verifyPin_ anywhere in this file.
+ *   saveWaitlistGame_ trusts body.staffName as already-verified — there is
+ *   no PasswordHash/verifyPin_ anywhere in this file, for any route.
  *
  * Setup (one time, on a brand new Google Sheet):
  * 1. Create a new Google Sheet.
@@ -33,8 +35,8 @@
  */
 
 const WAITLIST_SHEET_HEADERS = {
-  Waitlist_Games: ["GameID", "GameName", "ColorTag", "ActiveTables", "SortOrder", "Active"],
-  Waitlist_Entries: ["EntryID", "PlayerName", "GameID", "Status", "Reason", "AddedAt", "UpdatedAt", "StaffName"],
+  Waitlist_Games: ["GameID", "GameName", "ColorTag", "Running", "TableNumbers", "SortOrder", "Active"],
+  Waitlist_Entries: ["EntryID", "PlayerName", "GameID", "Status", "Reason", "SortIndex", "AddedAt", "UpdatedAt", "StaffName"],
   Waitlist_Audit_Log: ["LogID", "Timestamp", "StaffName", "Action", "RecordID", "FieldChanged", "OldValue", "NewValue", "Reason"]
 };
 
@@ -67,10 +69,10 @@ function setupWaitlistDatabase() {
   });
 
   appendWaitlistRows_("Waitlist_Games", [
-    ["WG_1", "$1/3 NLHE", "red", "", 1, true],
-    ["WG_2", "$2/5 NLHE", "teal", "", 2, true],
-    ["WG_3", "$1/3 PLO", "green", "", 3, true],
-    ["WG_4", "$5/10 NLHE", "gold", "", 4, true]
+    ["WG_1", "$1/3 NLHE", "red", false, "", 1, true],
+    ["WG_2", "$2/5 NLHE", "teal", false, "", 2, true],
+    ["WG_3", "$1/3 PLO", "green", false, "", 3, true],
+    ["WG_4", "$5/10 NLHE", "gold", false, "", 4, true]
   ]);
 }
 
@@ -110,9 +112,17 @@ function handleWaitlistRequest_(payload) {
       return withWaitlistLock_(function () {
         return createWaitlistEntries_(body);
       });
+    case "/api/waitlist/entries/seat":
+      return withWaitlistLock_(function () {
+        return markEntrySeated_(body);
+      });
     case "/api/waitlist/entries/remove":
       return withWaitlistLock_(function () {
         return removeWaitlistEntry_(body);
+      });
+    case "/api/waitlist/entries/reorder":
+      return withWaitlistLock_(function () {
+        return reorderWaitlistEntries_(body);
       });
     case "/api/waitlist/games/save":
       return withWaitlistLock_(function () {
@@ -128,7 +138,8 @@ function waitlistGameFromRow_(row) {
     gameId: String(row.GameID),
     gameName: String(row.GameName),
     colorTag: String(row.ColorTag),
-    activeTables: String(row.ActiveTables || ""),
+    running: String(row.Running).toLowerCase() === "true",
+    tableNumbers: String(row.TableNumbers || ""),
     sortOrder: Number(row.SortOrder || 0),
     active: String(row.Active).toLowerCase() === "true"
   };
@@ -141,6 +152,7 @@ function waitlistEntryFromRow_(row) {
     gameId: String(row.GameID),
     status: String(row.Status),
     reason: String(row.Reason || ""),
+    sortIndex: Number(row.SortIndex || 0),
     addedAt: waitlistIso_(row.AddedAt),
     updatedAt: waitlistIso_(row.UpdatedAt),
     staffName: String(row.StaffName)
@@ -156,19 +168,21 @@ function getWaitlistGames_(includeInactive) {
 
 function getWaitlistBoard_() {
   const games = getWaitlistGames_(false);
-  const waitingEntries = getWaitlistObjects_("Waitlist_Entries")
-    .map(waitlistEntryFromRow_)
-    .filter(function (entry) { return entry.status === "Waiting"; })
-    .sort(function (a, b) { return a.addedAt.localeCompare(b.addedAt); });
+  const allEntries = getWaitlistObjects_("Waitlist_Entries").map(waitlistEntryFromRow_);
+  const waiting = allEntries.filter(function (e) { return e.status === "Waiting"; }).sort(function (a, b) { return a.sortIndex - b.sortIndex; });
+  const seated = allEntries.filter(function (e) { return e.status === "Seated"; }).sort(function (a, b) { return a.updatedAt.localeCompare(b.updatedAt); });
+
+  const toBoardEntry = function (e) { return { entryId: e.entryId, playerName: e.playerName, addedAt: e.addedAt }; };
 
   const columns = games.map(function (game) {
-    const waiting = waitingEntries.filter(function (entry) { return entry.gameId === game.gameId; });
+    const gameWaiting = waiting.filter(function (e) { return e.gameId === game.gameId; });
+    const gameSeated = seated.filter(function (e) { return e.gameId === game.gameId; });
     return {
       game: game,
-      waiting: waiting.map(function (entry) {
-        return { entryId: entry.entryId, playerName: entry.playerName, addedAt: entry.addedAt };
-      }),
-      waitingCount: waiting.length
+      waiting: gameWaiting.map(toBoardEntry),
+      waitingCount: gameWaiting.length,
+      seated: gameSeated.map(toBoardEntry),
+      seatedCount: gameSeated.length
     };
   });
 
@@ -184,6 +198,14 @@ function getWaitlistBootstrap_() {
     games: getWaitlistGames_(true),
     board: getWaitlistBoard_()
   };
+}
+
+function nextWaitlistSortIndex_(gameId) {
+  const existing = getWaitlistObjects_("Waitlist_Entries").filter(function (row) {
+    return row.GameID === gameId && row.Status === "Waiting";
+  });
+  if (!existing.length) return 0;
+  return Math.max.apply(null, existing.map(function (row) { return Number(row.SortIndex || 0); })) + 1;
 }
 
 function createWaitlistEntries_(body) {
@@ -228,6 +250,7 @@ function createWaitlistEntries_(body) {
       GameID: gameId,
       Status: "Waiting",
       Reason: "",
+      SortIndex: nextWaitlistSortIndex_(gameId),
       AddedAt: now,
       UpdatedAt: now,
       StaffName: staffName
@@ -238,6 +261,27 @@ function createWaitlistEntries_(body) {
   });
 
   return created;
+}
+
+function markEntrySeated_(body) {
+  const staffName = String(body.staffName || "").trim();
+  if (!staffName) {
+    throw new Error("[JM-WL-000] Staff name is required.");
+  }
+
+  const row = getWaitlistObjects_("Waitlist_Entries").find(function (r) { return r.EntryID === body.entryId; });
+  if (!row) {
+    throw new Error("[JM-WL-005] Waitlist entry was not found.");
+  }
+  if (row.Status !== "Waiting") {
+    throw new Error("[JM-WL-010] Entry is not currently waiting.");
+  }
+
+  const now = new Date();
+  updateWaitlistObjectByKey_("Waitlist_Entries", "EntryID", body.entryId, { Status: "Seated", UpdatedAt: now });
+  writeWaitlistAudit_(staffName, "MARK_ENTRY_SEATED", body.entryId, "status", "Waiting", "Seated", "Marked seated");
+
+  return waitlistEntryFromRow_(Object.assign({}, row, { Status: "Seated", UpdatedAt: now }));
 }
 
 function removeWaitlistEntry_(body) {
@@ -257,9 +301,38 @@ function removeWaitlistEntry_(body) {
   const now = new Date();
   const reason = String(body.reason || "").trim() || "Removed from waitlist";
   updateWaitlistObjectByKey_("Waitlist_Entries", "EntryID", body.entryId, { Status: "Removed", Reason: reason, UpdatedAt: now });
-  writeWaitlistAudit_(staffName, "REMOVE_WAITLIST_ENTRY", body.entryId, "status", "Waiting", "Removed", reason);
+  writeWaitlistAudit_(staffName, "REMOVE_WAITLIST_ENTRY", body.entryId, "status", row.Status, "Removed", reason);
 
   return waitlistEntryFromRow_(Object.assign({}, row, { Status: "Removed", Reason: reason, UpdatedAt: now }));
+}
+
+function reorderWaitlistEntries_(body) {
+  const staffName = String(body.staffName || "").trim();
+  if (!staffName) {
+    throw new Error("[JM-WL-000] Staff name is required.");
+  }
+
+  const gameId = String(body.gameId || "");
+  const entryIds = Array.isArray(body.entryIds) ? body.entryIds : [];
+  const waiting = getWaitlistObjects_("Waitlist_Entries").filter(function (row) {
+    return row.GameID === gameId && row.Status === "Waiting";
+  });
+  const waitingIds = waiting.map(function (row) { return row.EntryID; });
+
+  const sameSet = entryIds.length === waitingIds.length && entryIds.every(function (entryId) { return waitingIds.indexOf(entryId) !== -1; });
+  if (!sameSet) {
+    throw new Error("[JM-WL-011] The waiting list changed — refresh and try again.");
+  }
+
+  const now = new Date();
+  entryIds.forEach(function (entryId, index) {
+    updateWaitlistObjectByKey_("Waitlist_Entries", "EntryID", entryId, { SortIndex: index, UpdatedAt: now });
+  });
+  writeWaitlistAudit_(staffName, "REORDER_WAITLIST_ENTRIES", gameId, "sortIndex", "", "", "Waitlist reordered");
+
+  return getWaitlistObjects_("Waitlist_Entries")
+    .filter(function (row) { return row.GameID === gameId && row.Status === "Waiting"; })
+    .map(waitlistEntryFromRow_);
 }
 
 function saveWaitlistGame_(body) {
@@ -270,7 +343,8 @@ function saveWaitlistGame_(body) {
 
   const gameName = String(body.gameName || "").trim();
   const colorTag = String(body.colorTag || "").trim();
-  const sortOrder = Number(body.sortOrder);
+  const running = String(body.running).toLowerCase() === "true" || body.running === true;
+  const tableNumbers = String(body.tableNumbers || "").trim();
   const active = String(body.active).toLowerCase() === "true" || body.active === true;
 
   if (!gameName) {
@@ -288,21 +362,27 @@ function saveWaitlistGame_(body) {
     updateWaitlistObjectByKey_("Waitlist_Games", "GameID", body.gameId, {
       GameName: gameName,
       ColorTag: colorTag,
-      ActiveTables: String(body.activeTables || "").trim(),
-      SortOrder: Number.isFinite(sortOrder) ? sortOrder : 0,
+      Running: running,
+      TableNumbers: tableNumbers,
       Active: active
     });
     writeWaitlistAudit_(staffName, "SAVE_WAITLIST_GAME", body.gameId, "gameName", oldRow.GameName, gameName, "Waitlist game updated");
     return getWaitlistGames_(true).find(function (g) { return g.gameId === body.gameId; });
   }
 
+  const existingGames = getWaitlistObjects_("Waitlist_Games");
+  const nextSortOrder = existingGames.length
+    ? Math.max.apply(null, existingGames.map(function (row) { return Number(row.SortOrder || 0); })) + 1
+    : 1;
+
   const gameId = newWaitlistId_("WLG");
   appendWaitlistObject_("Waitlist_Games", {
     GameID: gameId,
     GameName: gameName,
     ColorTag: colorTag,
-    ActiveTables: String(body.activeTables || "").trim(),
-    SortOrder: Number.isFinite(sortOrder) ? sortOrder : 0,
+    Running: running,
+    TableNumbers: tableNumbers,
+    SortOrder: nextSortOrder,
     Active: active
   });
   writeWaitlistAudit_(staffName, "SAVE_WAITLIST_GAME", gameId, "gameName", "", gameName, "Waitlist game created");
