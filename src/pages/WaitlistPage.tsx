@@ -1,6 +1,19 @@
-import { Fragment, FormEvent, DragEvent, useEffect, useState } from "react";
+import { FormEvent, DragEvent, useEffect, useState } from "react";
 import { clsx } from "clsx";
-import { Armchair, ChevronDown, ChevronUp, GripVertical, Monitor, PlusCircle, RefreshCcw, Save, UserPlus, X } from "lucide-react";
+import {
+  Armchair,
+  ChevronDown,
+  ChevronUp,
+  GripVertical,
+  Lock,
+  LockOpen,
+  Monitor,
+  PlusCircle,
+  RefreshCcw,
+  Save,
+  UserPlus,
+  X
+} from "lucide-react";
 import { PageTitle } from "../components/AppShell";
 import { Button, ButtonLink } from "../components/Button";
 import { FormField, TextInput } from "../components/FormField";
@@ -21,6 +34,11 @@ const COLOR_TAG_LABELS: Record<WaitlistColorTag, string> = {
   gold: "Gold",
   burgundy: "Burgundy"
 };
+
+type RunningModalState =
+  | { mode: "start"; gameId: string; gameName: string; tableNumbers: string }
+  | { mode: "stop"; gameId: string; gameName: string }
+  | { mode: "edit-tables"; gameId: string; gameName: string; tableNumbers: string };
 
 function moveWithinColumn(column: WaitlistBoardColumn, fromId: string, toId: string): WaitlistBoardColumn {
   const items = [...column.waiting];
@@ -48,14 +66,18 @@ export function WaitlistPage() {
   const [addNotice, setAddNotice] = useState("");
   const [addLoading, setAddLoading] = useState(false);
   const [rowActionError, setRowActionError] = useState("");
+
+  const [reorderEnabled, setReorderEnabled] = useState(false);
   const [draggedEntryId, setDraggedEntryId] = useState<string | null>(null);
+
+  const [runningModal, setRunningModal] = useState<RunningModalState | null>(null);
+  const [runningModalError, setRunningModalError] = useState("");
+  const [runningModalLoading, setRunningModalLoading] = useState(false);
 
   const [showManageGames, setShowManageGames] = useState(false);
   const [selectedGameEditId, setSelectedGameEditId] = useState("__new");
   const [gameName, setGameName] = useState("");
   const [gameColorTag, setGameColorTag] = useState<WaitlistColorTag>("red");
-  const [gameRunning, setGameRunning] = useState(false);
-  const [gameTableNumbers, setGameTableNumbers] = useState("");
   const [gameActive, setGameActive] = useState("true");
   const [gamePin, setGamePin] = useState("");
   const [gameError, setGameError] = useState("");
@@ -191,6 +213,7 @@ export function WaitlistPage() {
   }
 
   function handleDragOver(event: DragEvent, gameId: string, overEntryId: string) {
+    if (!reorderEnabled) return;
     event.preventDefault();
     if (!draggedEntryId || draggedEntryId === overEntryId) {
       return;
@@ -207,6 +230,7 @@ export function WaitlistPage() {
   }
 
   async function handleDrop(gameId: string) {
+    if (!reorderEnabled) return;
     const column = board?.columns.find((c) => c.game.gameId === gameId);
     setDraggedEntryId(null);
     if (!column) return;
@@ -223,12 +247,60 @@ export function WaitlistPage() {
     }
   }
 
+  function openStartRunning(game: WaitlistGame) {
+    setRunningModalError("");
+    setRunningModal({ mode: "start", gameId: game.gameId, gameName: game.gameName, tableNumbers: "" });
+  }
+
+  function openStopRunning(game: WaitlistGame) {
+    setRunningModalError("");
+    setRunningModal({ mode: "stop", gameId: game.gameId, gameName: game.gameName });
+  }
+
+  function openEditTables(game: WaitlistGame) {
+    setRunningModalError("");
+    setRunningModal({ mode: "edit-tables", gameId: game.gameId, gameName: game.gameName, tableNumbers: game.tableNumbers });
+  }
+
+  async function confirmRunningModal() {
+    if (!runningModal) return;
+    setRunningModalError("");
+    setRunningModalLoading(true);
+
+    try {
+      const running = runningModal.mode !== "stop";
+      const tableNumbers =
+        runningModal.mode === "stop"
+          ? games.find((game) => game.gameId === runningModal.gameId)?.tableNumbers ?? ""
+          : runningModal.tableNumbers;
+
+      const updated = await api.setGameRunning({
+        gameId: runningModal.gameId,
+        running,
+        tableNumbers,
+        staffName: session.staffName
+      });
+      setGames((current) => current.map((game) => (game.gameId === updated.gameId ? updated : game)));
+      setBoard((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          columns: current.columns.map((column) => (column.game.gameId === updated.gameId ? { ...column, game: updated } : column))
+        };
+      });
+      setRunningModal(null);
+      void load({ bypassCache: true }).catch(() => undefined);
+    } catch (err) {
+      setRunningModalError(errorMessage(err, "JM-WL-905", "Could not update game status."));
+    } finally {
+      setRunningModalLoading(false);
+    }
+  }
+
   function resetGameForm() {
     setSelectedGameEditId("__new");
     setGameName("");
     setGameColorTag("red");
-    setGameRunning(false);
-    setGameTableNumbers("");
     setGameActive("true");
     setGamePin("");
   }
@@ -247,8 +319,6 @@ export function WaitlistPage() {
 
     setGameName(game.gameName);
     setGameColorTag(game.colorTag);
-    setGameRunning(game.running);
-    setGameTableNumbers(game.tableNumbers);
     setGameActive(String(game.active));
   }
 
@@ -259,12 +329,13 @@ export function WaitlistPage() {
     setGameLoading(true);
 
     try {
+      const existing = selectedGameEditId === "__new" ? null : games.find((game) => game.gameId === selectedGameEditId);
       const saved = await api.saveWaitlistGame({
-        gameId: selectedGameEditId === "__new" ? undefined : selectedGameEditId,
+        gameId: existing?.gameId,
         gameName,
         colorTag: gameColorTag,
-        running: gameRunning,
-        tableNumbers: gameTableNumbers,
+        running: existing?.running ?? false,
+        tableNumbers: existing?.tableNumbers ?? "",
         active: gameActive === "true",
         staffName: session.staffName,
         pin: gamePin
@@ -308,6 +379,10 @@ export function WaitlistPage() {
             <Button variant="secondary" onClick={() => void refresh()}>
               <RefreshCcw className={refreshing ? "h-[15px] w-[15px] animate-spin" : "h-[15px] w-[15px]"} />
               {refreshing ? "Refreshing..." : "Refresh"}
+            </Button>
+            <Button variant={reorderEnabled ? "danger" : "secondary"} onClick={() => setReorderEnabled((current) => !current)}>
+              {reorderEnabled ? <LockOpen className="h-[15px] w-[15px]" /> : <Lock className="h-[15px] w-[15px]" />}
+              {reorderEnabled ? "Reordering on" : "Enable reorder"}
             </Button>
           </div>
         }
@@ -369,6 +444,11 @@ export function WaitlistPage() {
           </Panel>
 
           {rowActionError ? <div className="mt-5"><StatusMessage tone="error">{rowActionError}</StatusMessage></div> : null}
+          {!reorderEnabled ? (
+            <div className="mt-5 rounded-[10px] border border-black/[0.08] bg-black/[0.02] px-4 py-2.5 text-[12.5px] font-semibold text-muted">
+              Reordering is locked. Click "Enable reorder" above to drag players up or down the waiting list.
+            </div>
+          ) : null}
 
           <div className="mt-5 grid gap-5 xl:grid-cols-2">
             {board.columns.map((column) => {
@@ -379,14 +459,38 @@ export function WaitlistPage() {
                     title={column.game.gameName}
                     action={<span className="text-xs font-semibold text-muted">{column.waitingCount} waiting</span>}
                   >
-                    {column.game.running ? (
-                      <span className="inline-flex items-center gap-1.5 font-bold" style={{ color: theme.accent }}>
-                        <span className="h-1.5 w-1.5 rounded-full" style={{ background: theme.accent }} />
-                        RUNNING{column.game.tableNumbers ? ` · Tables ${column.game.tableNumbers}` : ""}
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={column.game.running}
+                        title={column.game.running ? "Stop running" : "Start running"}
+                        onClick={() => (column.game.running ? openStopRunning(column.game) : openStartRunning(column.game))}
+                        className="relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors duration-200"
+                        style={{ background: column.game.running ? theme.accent : "rgba(0,0,0,0.16)" }}
+                      >
+                        <span
+                          className={clsx(
+                            "inline-block h-[18px] w-[18px] transform rounded-full bg-white shadow transition-transform duration-200",
+                            column.game.running ? "translate-x-[22px]" : "translate-x-[3px]"
+                          )}
+                        />
+                      </button>
+                      <span className="text-[12.5px] font-bold" style={{ color: column.game.running ? theme.accent : undefined }}>
+                        {column.game.running
+                          ? `Running${column.game.tableNumbers ? ` · Table ${column.game.tableNumbers}` : ""}`
+                          : "Interest"}
                       </span>
-                    ) : (
-                      "Interest — no tables running yet"
-                    )}
+                      {column.game.running ? (
+                        <button
+                          type="button"
+                          onClick={() => openEditTables(column.game)}
+                          className="text-[11.5px] font-bold text-muted underline decoration-dotted underline-offset-2 transition-colors hover:text-ink"
+                        >
+                          Edit tables
+                        </button>
+                      ) : null}
+                    </div>
                   </PanelHeader>
                   <div className="border-b border-black/[0.06] px-[26px] pb-2.5 pt-3.5 text-[11px] font-bold uppercase tracking-[0.08em] text-faint">
                     Waitlist
@@ -395,11 +499,11 @@ export function WaitlistPage() {
                     <div className="px-[26px] py-5 text-sm text-muted">No one waiting for this game.</div>
                   ) : (
                     <div className="divide-y divide-black/[0.06]">
-                      {column.waiting.map((entry) => (
+                      {column.waiting.map((entry, index) => (
                         <div
                           key={entry.entryId}
-                          draggable
-                          onDragStart={() => setDraggedEntryId(entry.entryId)}
+                          draggable={reorderEnabled}
+                          onDragStart={() => reorderEnabled && setDraggedEntryId(entry.entryId)}
                           onDragOver={(event) => handleDragOver(event, column.game.gameId, entry.entryId)}
                           onDrop={() => void handleDrop(column.game.gameId)}
                           onDragEnd={() => setDraggedEntryId(null)}
@@ -408,7 +512,13 @@ export function WaitlistPage() {
                             draggedEntryId === entry.entryId ? "opacity-40" : "opacity-100"
                           )}
                         >
-                          <GripVertical className="h-4 w-4 flex-shrink-0 cursor-grab text-faint active:cursor-grabbing" />
+                          <GripVertical
+                            className={clsx(
+                              "h-4 w-4 flex-shrink-0",
+                              reorderEnabled ? "cursor-grab text-faint active:cursor-grabbing" : "text-black/10"
+                            )}
+                          />
+                          <span className="w-5 flex-shrink-0 text-center text-[12px] font-bold text-faint">{index + 1}</span>
                           <span className="flex-1 truncate font-semibold text-ink">{entry.playerName}</span>
                           <button
                             type="button"
@@ -467,7 +577,7 @@ export function WaitlistPage() {
                 </Button>
               }
             >
-              Add or edit the game types offered on the waitlist and TV board.
+              Add or edit the game types offered on the waitlist and TV board. Toggle Interest/Running from each game's card above.
             </PanelHeader>
             {showManageGames ? (
               <div className="p-[26px]">
@@ -503,35 +613,6 @@ export function WaitlistPage() {
                       />
                     </div>
                   </div>
-                  <FormField label="Status">
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setGameRunning(false)}
-                        className={clsx(
-                          "min-h-[42px] rounded-[10px] border text-sm font-bold transition-all duration-150",
-                          !gameRunning ? "border-ink bg-ink text-white" : "border-black/[0.14] bg-field text-muted hover:bg-black/[0.03]"
-                        )}
-                      >
-                        Interest
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setGameRunning(true)}
-                        className={clsx(
-                          "min-h-[42px] rounded-[10px] border text-sm font-bold transition-all duration-150",
-                          gameRunning ? "border-success bg-success text-white" : "border-black/[0.14] bg-field text-muted hover:bg-black/[0.03]"
-                        )}
-                      >
-                        Running
-                      </button>
-                    </div>
-                  </FormField>
-                  {gameRunning ? (
-                    <FormField label="Table numbers" hint="Shown on the TV board, e.g. 45, 48">
-                      <TextInput value={gameTableNumbers} onChange={(event) => setGameTableNumbers(event.target.value)} />
-                    </FormField>
-                  ) : null}
                   <SelectField
                     label="Active"
                     value={gameActive}
@@ -574,6 +655,53 @@ export function WaitlistPage() {
           </Panel>
         </>
       )}
+
+      {runningModal ? (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-4"
+          onClick={() => (runningModalLoading ? undefined : setRunningModal(null))}
+        >
+          <div
+            className="w-full max-w-[420px] rounded-2xl border border-black/[0.08] bg-white p-6 shadow-panel"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="text-[17px] font-extrabold text-ink">
+              {runningModal.mode === "start" ? `Start running ${runningModal.gameName}?` : null}
+              {runningModal.mode === "stop" ? `Stop running ${runningModal.gameName}?` : null}
+              {runningModal.mode === "edit-tables" ? `Update tables for ${runningModal.gameName}` : null}
+            </h3>
+            <p className="mt-1.5 text-[13px] leading-6 text-muted">
+              {runningModal.mode === "start" ? "This moves the game from Interest to Running on the TV board." : null}
+              {runningModal.mode === "stop" ? "This moves the game back to Interest on the TV board." : null}
+              {runningModal.mode === "edit-tables" ? "Add or change the table numbers shown on the TV board." : null}
+            </p>
+            {runningModal.mode !== "stop" ? (
+              <div className="mt-4">
+                <FormField label="Table numbers" hint="e.g. 45, 48">
+                  <TextInput
+                    value={runningModal.tableNumbers}
+                    onChange={(event) =>
+                      setRunningModal((current) =>
+                        current && current.mode !== "stop" ? { ...current, tableNumbers: event.target.value } : current
+                      )
+                    }
+                    autoFocus
+                  />
+                </FormField>
+              </div>
+            ) : null}
+            {runningModalError ? <div className="mt-3"><StatusMessage tone="error">{runningModalError}</StatusMessage></div> : null}
+            <div className="mt-5 flex gap-2.5">
+              <Button type="button" onClick={() => void confirmRunningModal()} disabled={runningModalLoading}>
+                {runningModalLoading ? "Saving..." : "Confirm"}
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setRunningModal(null)} disabled={runningModalLoading}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

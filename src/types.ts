@@ -87,7 +87,8 @@ export type AuditLogEntry = {
     | "MARK_ENTRY_SEATED"
     | "REMOVE_WAITLIST_ENTRY"
     | "REORDER_WAITLIST_ENTRIES"
-    | "SAVE_WAITLIST_GAME";
+    | "SAVE_WAITLIST_GAME"
+    | "SET_GAME_RUNNING";
   recordId: string;
   fieldChanged: string;
   oldValue: string;
@@ -380,4 +381,11 @@ export type SaveWaitlistGamePayload = {
   active: boolean;
   staffName: string;
   pin: string;
+};
+
+export type SetGameRunningPayload = {
+  gameId: string;
+  running: boolean;
+  tableNumbers: string;
+  staffName: string;
 };

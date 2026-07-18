@@ -128,6 +128,10 @@ function handleWaitlistRequest_(payload) {
       return withWaitlistLock_(function () {
         return saveWaitlistGame_(body);
       });
+    case "/api/waitlist/games/set-running":
+      return withWaitlistLock_(function () {
+        return setGameRunning_(body);
+      });
     default:
       throw new Error("[JM-WLSCRIPT-003] Unknown route: " + payload.path);
   }
@@ -386,6 +390,35 @@ function saveWaitlistGame_(body) {
     Active: active
   });
   writeWaitlistAudit_(staffName, "SAVE_WAITLIST_GAME", gameId, "gameName", "", gameName, "Waitlist game created");
+  return getWaitlistGames_(true).find(function (g) { return g.gameId === gameId; });
+}
+
+function setGameRunning_(body) {
+  const staffName = String(body.staffName || "").trim();
+  if (!staffName) {
+    throw new Error("[JM-WL-000] Staff name is required.");
+  }
+
+  const gameId = String(body.gameId || "");
+  const oldRow = getWaitlistObjects_("Waitlist_Games").find(function (row) { return row.GameID === gameId; });
+  if (!oldRow) {
+    throw new Error("[JM-WL-009] Game was not found.");
+  }
+
+  const running = body.running === true || String(body.running).toLowerCase() === "true";
+  const tableNumbers = String(body.tableNumbers || "").trim();
+
+  updateWaitlistObjectByKey_("Waitlist_Games", "GameID", gameId, { Running: running, TableNumbers: tableNumbers });
+  writeWaitlistAudit_(
+    staffName,
+    "SET_GAME_RUNNING",
+    gameId,
+    "running",
+    String(oldRow.Running),
+    String(running),
+    running ? "Started running · Table " + tableNumbers : "Stopped running"
+  );
+
   return getWaitlistGames_(true).find(function (g) { return g.gameId === gameId; });
 }
 

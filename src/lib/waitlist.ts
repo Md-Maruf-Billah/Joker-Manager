@@ -5,6 +5,7 @@ import type {
   RemoveWaitlistEntryPayload,
   Role,
   SaveWaitlistGamePayload,
+  SetGameRunningPayload,
   WaitlistBoardData,
   WaitlistBootstrapData,
   WaitlistColorTag,
@@ -300,4 +301,31 @@ export function saveWaitlistGame(
   );
 
   return created;
+}
+
+export function setGameRunning(data: WaitlistData, payload: SetGameRunningPayload, staff: StaffIdentity): WaitlistGame {
+  const game = data.games.find((g) => g.gameId === payload.gameId);
+  if (!game) {
+    throw appError("JM-WL-009", "Game was not found.");
+  }
+
+  const oldRunning = game.running;
+  game.running = payload.running;
+  game.tableNumbers = payload.tableNumbers.trim();
+
+  data.auditLog.push(
+    audit(
+      staff.staffName,
+      staff.role,
+      "SET_GAME_RUNNING",
+      game.gameId,
+      "running",
+      String(oldRunning),
+      String(payload.running),
+      payload.running ? `Started running · Table ${game.tableNumbers}` : "Stopped running",
+      "waitlist"
+    )
+  );
+
+  return game;
 }

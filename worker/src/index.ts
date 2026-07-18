@@ -44,7 +44,8 @@ const routes: Record<string, RouteConfig> = {
   "/api/waitlist/entries/seat": { methods: ["POST"] },
   "/api/waitlist/entries/remove": { methods: ["POST"] },
   "/api/waitlist/entries/reorder": { methods: ["POST"] },
-  "/api/waitlist/games/save": { methods: ["POST"] }
+  "/api/waitlist/games/save": { methods: ["POST"] },
+  "/api/waitlist/games/set-running": { methods: ["POST"] }
 };
 
 // The Waitlist feature lives on a completely separate Google Sheet and Apps
@@ -114,7 +115,8 @@ const MUTATING_ROUTES = new Set([
   "/api/waitlist/entries/seat",
   "/api/waitlist/entries/remove",
   "/api/waitlist/entries/reorder",
-  "/api/waitlist/games/save"
+  "/api/waitlist/games/save",
+  "/api/waitlist/games/set-running"
 ]);
 // The TV display polls every 30s (see TvDisplayPage.tsx). Every poll that lands
 // past the freshness window triggers a background Apps Script call, and each of

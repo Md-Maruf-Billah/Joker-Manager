@@ -17,6 +17,7 @@ import type {
   ReorderWaitlistEntriesPayload,
   RemoveWaitlistEntryPayload,
   SaveWaitlistGamePayload,
+  SetGameRunningPayload,
   SetStaffActivePayload,
   SetStaffPinPayload,
   StaffListItem,
@@ -55,7 +56,8 @@ const MUTATING_PATHS = new Set([
   "/api/waitlist/entries/seat",
   "/api/waitlist/entries/remove",
   "/api/waitlist/entries/reorder",
-  "/api/waitlist/games/save"
+  "/api/waitlist/games/save",
+  "/api/waitlist/games/set-running"
 ]);
 
 const inFlightReads = new Map<string, Promise<unknown>>();
@@ -512,6 +514,16 @@ export const api = {
     }
 
     return request<WaitlistGame>("/api/waitlist/games/save", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  setGameRunning(payload: SetGameRunningPayload): Promise<WaitlistGame> {
+    if (!API_BASE_URL) {
+      return mockWaitlistApi.setGameRunning(payload);
+    }
+
+    return request<WaitlistGame>("/api/waitlist/games/set-running", {
       method: "POST",
       body: JSON.stringify(payload)
     });

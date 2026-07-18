@@ -10,7 +10,8 @@ import {
   normalizeWaitlistData,
   removeWaitlistEntry,
   reorderWaitlistEntries,
-  saveWaitlistGame
+  saveWaitlistGame,
+  setGameRunning
 } from "./waitlist";
 
 const staff = { staffName: "staff", role: "staff" as const };
@@ -249,5 +250,40 @@ describe("saveWaitlistGame", () => {
     expect(() =>
       saveWaitlistGame(data, { gameName: "New game", colorTag: "purple" as never, running: false, tableNumbers: "", active: true, staffName: "staff", pin: "7777" }, staff)
     ).toThrow("[JM-WL-008]");
+  });
+});
+
+describe("setGameRunning", () => {
+  it("starts a game running with table numbers, with no pin required", () => {
+    const data = freshWaitlistData();
+    const updated = setGameRunning(data, { gameId: "G1", running: true, tableNumbers: "12, 14", staffName: "staff" }, staff);
+    expect(updated.running).toBe(true);
+    expect(updated.tableNumbers).toBe("12, 14");
+  });
+
+  it("stops a running game", () => {
+    const data = freshWaitlistData();
+    const updated = setGameRunning(data, { gameId: "G2", running: false, tableNumbers: "45, 48", staffName: "staff" }, staff);
+    expect(updated.running).toBe(false);
+  });
+
+  it("can update table numbers on an already-running game without changing running state", () => {
+    const data = freshWaitlistData();
+    const updated = setGameRunning(data, { gameId: "G2", running: true, tableNumbers: "45, 48, 50", staffName: "staff" }, staff);
+    expect(updated.running).toBe(true);
+    expect(updated.tableNumbers).toBe("45, 48, 50");
+  });
+
+  it("rejects an unknown gameId", () => {
+    const data = freshWaitlistData();
+    expect(() => setGameRunning(data, { gameId: "unknown", running: true, tableNumbers: "1", staffName: "staff" }, staff)).toThrow("[JM-WL-009]");
+  });
+
+  it("writes an audit entry tagged with source waitlist", () => {
+    const data = freshWaitlistData();
+    setGameRunning(data, { gameId: "G1", running: true, tableNumbers: "12", staffName: "staff" }, staff);
+    const entry = data.auditLog[data.auditLog.length - 1];
+    expect(entry.action).toBe("SET_GAME_RUNNING");
+    expect(entry.source).toBe("waitlist");
   });
 });

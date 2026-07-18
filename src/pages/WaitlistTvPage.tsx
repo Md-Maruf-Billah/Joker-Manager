@@ -74,8 +74,7 @@ export function WaitlistTvPage() {
         </button>
       ) : null}
 
-      <div className="relative z-10 flex flex-shrink-0 flex-col items-center gap-3 px-5 pt-[clamp(20px,3.5vh,44px)]">
-        <img src="/brand/playlive-logo.png" alt="PlayLive Melbourne" className="h-[clamp(22px,3vw,42px)] opacity-95" />
+      <div className="relative z-10 flex flex-shrink-0 flex-col items-center px-5 pt-[clamp(20px,3.5vh,44px)]">
         <div
           className="text-center font-black uppercase leading-tight tracking-wide text-white"
           style={{ fontSize: "clamp(24px,3.4vw,58px)", textShadow: "0 0 40px rgba(198,157,66,0.35)" }}
@@ -106,7 +105,7 @@ export function WaitlistTvPage() {
                   </div>
                   <div className="mt-1.5 font-semibold" style={{ color: theme.accent, fontSize: "clamp(11px,1.1vw,16px)" }}>
                     {column.game.running
-                      ? `Running${column.game.tableNumbers ? ` · Tables ${column.game.tableNumbers}` : ""}`
+                      ? `Running${column.game.tableNumbers ? ` · Table ${column.game.tableNumbers}` : ""}`
                       : "Interest list"}
                   </div>
                 </div>
@@ -176,6 +175,13 @@ export function WaitlistTvPage() {
           </div>
         </div>
       )}
+
+      <div
+        className="relative z-10 flex flex-shrink-0 items-center justify-center border-t border-white/10 px-5"
+        style={{ height: "clamp(52px,7vh,92px)" }}
+      >
+        <img src="/brand/playlive-logo.png" alt="PlayLive Melbourne" className="h-[clamp(18px,2.4vw,32px)] opacity-70" />
+      </div>
     </main>
   );
 }

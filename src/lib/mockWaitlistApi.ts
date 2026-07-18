@@ -4,6 +4,7 @@ import type {
   ReorderWaitlistEntriesPayload,
   RemoveWaitlistEntryPayload,
   SaveWaitlistGamePayload,
+  SetGameRunningPayload,
   WaitlistData
 } from "../types";
 import { loadMockData } from "./mockApi";
@@ -17,7 +18,8 @@ import {
   normalizeWaitlistData,
   removeWaitlistEntry,
   reorderWaitlistEntries,
-  saveWaitlistGame
+  saveWaitlistGame,
+  setGameRunning
 } from "./waitlist";
 
 const WAITLIST_STORE_KEY = "joker-manager-waitlist-demo-data";
@@ -104,5 +106,9 @@ export const mockWaitlistApi = {
   async saveWaitlistGame(payload: SaveWaitlistGamePayload) {
     const staff = verifyStaff(payload.staffName, payload.pin);
     return withWaitlistData((data) => saveWaitlistGame(data, payload, staff));
+  },
+  async setGameRunning(payload: SetGameRunningPayload) {
+    const staff = passwordlessStaff(payload.staffName);
+    return withWaitlistData((data) => setGameRunning(data, payload, staff));
   }
 };
