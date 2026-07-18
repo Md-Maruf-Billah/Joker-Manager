@@ -21,7 +21,7 @@ const navSections: NavSection[] = [
     ]
   },
   {
-    label: "TLT Waitlist",
+    label: "Time Limit Tournaments",
     items: [
       { to: "/waitlist", label: "TLT Waitlist", icon: ListChecks },
       { to: "/waitlist-tv", label: "TLT Waitlist TV", icon: Tv }

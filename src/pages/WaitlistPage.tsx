@@ -1,6 +1,6 @@
 import { Fragment, FormEvent, DragEvent, useEffect, useState } from "react";
 import { clsx } from "clsx";
-import { Armchair, ChevronDown, ChevronUp, GripVertical, Monitor, PlusCircle, Save, UserPlus, X } from "lucide-react";
+import { Armchair, ChevronDown, ChevronUp, GripVertical, Monitor, PlusCircle, RefreshCcw, Save, UserPlus, X } from "lucide-react";
 import { PageTitle } from "../components/AppShell";
 import { Button, ButtonLink } from "../components/Button";
 import { FormField, TextInput } from "../components/FormField";
@@ -40,6 +40,7 @@ export function WaitlistPage() {
   const [games, setGames] = useState<WaitlistGame[]>(() => initialBootstrap?.games ?? []);
   const [board, setBoard] = useState<WaitlistBoardData | null>(() => initialBootstrap?.board ?? null);
   const [loadError, setLoadError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
   const [playerName, setPlayerName] = useState("");
   const [selectedGameIds, setSelectedGameIds] = useState<string[]>([]);
@@ -67,6 +68,18 @@ export function WaitlistPage() {
     setBoard(bootstrap.board);
   }
 
+  async function refresh() {
+    setLoadError("");
+    setRefreshing(true);
+    try {
+      await load({ bypassCache: true });
+    } catch (err) {
+      setLoadError(errorMessage(err, "JM-WL-001", "Could not load waitlist."));
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   useEffect(() => {
     void load({ bypassCache: Boolean(initialBootstrap) }).catch((err) =>
       setLoadError(errorMessage(err, "JM-WL-001", "Could not load waitlist."))
@@ -86,15 +99,34 @@ export function WaitlistPage() {
     setAddLoading(true);
 
     try {
-      await api.createWaitlistEntries({
+      const created = await api.createWaitlistEntries({
         playerName,
         gameIds: selectedGameIds,
         staffName: session.staffName
       });
+      setBoard((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          totalWaiting: current.totalWaiting + created.length,
+          columns: current.columns.map((column) => {
+            const additions = created.filter((entry) => entry.gameId === column.game.gameId);
+            if (!additions.length) return column;
+            return {
+              ...column,
+              waiting: [
+                ...column.waiting,
+                ...additions.map((entry) => ({ entryId: entry.entryId, playerName: entry.playerName, addedAt: entry.addedAt }))
+              ],
+              waitingCount: column.waitingCount + additions.length
+            };
+          })
+        };
+      });
       setAddNotice(`${playerName} added to the waitlist.`);
       setPlayerName("");
       setSelectedGameIds([]);
-      await load({ bypassCache: true });
+      void load({ bypassCache: true }).catch(() => undefined);
     } catch (err) {
       setAddError(errorMessage(err, "JM-WL-900", "Could not add to waitlist."));
     } finally {
@@ -105,8 +137,26 @@ export function WaitlistPage() {
   async function handleSeat(entryId: string) {
     setRowActionError("");
     try {
-      await api.markEntrySeated({ entryId, staffName: session.staffName });
-      await load({ bypassCache: true });
+      const updated = await api.markEntrySeated({ entryId, staffName: session.staffName });
+      setBoard((current) => {
+        if (!current) return current;
+        let removedFromWaiting = false;
+        const columns = current.columns.map((column) => {
+          if (column.game.gameId !== updated.gameId) return column;
+          const stillWaiting = column.waiting.filter((entry) => entry.entryId !== entryId);
+          if (stillWaiting.length === column.waiting.length) return column;
+          removedFromWaiting = true;
+          return {
+            ...column,
+            waiting: stillWaiting,
+            waitingCount: column.waitingCount - 1,
+            seated: [{ entryId: updated.entryId, playerName: updated.playerName, addedAt: updated.addedAt }, ...column.seated],
+            seatedCount: column.seatedCount + 1
+          };
+        });
+        return { ...current, columns, totalWaiting: removedFromWaiting ? current.totalWaiting - 1 : current.totalWaiting };
+      });
+      void load({ bypassCache: true }).catch(() => undefined);
     } catch (err) {
       setRowActionError(errorMessage(err, "JM-WL-901", "Could not mark as seated."));
     }
@@ -116,7 +166,25 @@ export function WaitlistPage() {
     setRowActionError("");
     try {
       await api.removeWaitlistEntry({ entryId, staffName: session.staffName });
-      await load({ bypassCache: true });
+      setBoard((current) => {
+        if (!current) return current;
+        let removedFromWaiting = false;
+        const columns = current.columns.map((column) => {
+          const wasWaiting = column.waiting.some((entry) => entry.entryId === entryId);
+          const wasSeated = column.seated.some((entry) => entry.entryId === entryId);
+          if (!wasWaiting && !wasSeated) return column;
+          if (wasWaiting) removedFromWaiting = true;
+          return {
+            ...column,
+            waiting: column.waiting.filter((entry) => entry.entryId !== entryId),
+            waitingCount: wasWaiting ? column.waitingCount - 1 : column.waitingCount,
+            seated: column.seated.filter((entry) => entry.entryId !== entryId),
+            seatedCount: wasSeated ? column.seatedCount - 1 : column.seatedCount
+          };
+        });
+        return { ...current, columns, totalWaiting: removedFromWaiting ? current.totalWaiting - 1 : current.totalWaiting };
+      });
+      void load({ bypassCache: true }).catch(() => undefined);
     } catch (err) {
       setRowActionError(errorMessage(err, "JM-WL-902", "Could not remove entry."));
     }
@@ -191,7 +259,7 @@ export function WaitlistPage() {
     setGameLoading(true);
 
     try {
-      await api.saveWaitlistGame({
+      const saved = await api.saveWaitlistGame({
         gameId: selectedGameEditId === "__new" ? undefined : selectedGameEditId,
         gameName,
         colorTag: gameColorTag,
@@ -201,9 +269,23 @@ export function WaitlistPage() {
         staffName: session.staffName,
         pin: gamePin
       });
+      setGames((current) => {
+        const exists = current.some((game) => game.gameId === saved.gameId);
+        return exists ? current.map((game) => (game.gameId === saved.gameId ? saved : game)) : [...current, saved];
+      });
+      setBoard((current) => {
+        if (!current) return current;
+        const hasColumn = current.columns.some((column) => column.game.gameId === saved.gameId);
+        return {
+          ...current,
+          columns: hasColumn
+            ? current.columns.map((column) => (column.game.gameId === saved.gameId ? { ...column, game: saved } : column))
+            : [...current.columns, { game: saved, waiting: [], waitingCount: 0, seated: [], seatedCount: 0 }]
+        };
+      });
       setGameNotice("Game saved.");
       resetGameForm();
-      await load({ bypassCache: true });
+      void load({ bypassCache: true }).catch(() => undefined);
     } catch (err) {
       setGameError(errorMessage(err, "JM-WL-904", "Could not save game."));
     } finally {
@@ -218,10 +300,16 @@ export function WaitlistPage() {
       <PageTitle
         title="TLT Waitlist"
         action={
-          <ButtonLink to="/waitlist-tv" variant="secondary" target="_blank">
-            <Monitor className="h-[15px] w-[15px]" />
-            Open TV
-          </ButtonLink>
+          <div className="flex flex-wrap gap-2">
+            <ButtonLink to="/waitlist-tv" variant="secondary" target="_blank">
+              <Monitor className="h-[15px] w-[15px]" />
+              Open TV
+            </ButtonLink>
+            <Button variant="secondary" onClick={() => void refresh()}>
+              <RefreshCcw className={refreshing ? "h-[15px] w-[15px] animate-spin" : "h-[15px] w-[15px]"} />
+              {refreshing ? "Refreshing..." : "Refresh"}
+            </Button>
+          </div>
         }
       >
         Record player interest for Time Limit Tournaments. Shows live on the TLT Waitlist TV.

@@ -5,11 +5,6 @@ import { api } from "../lib/api";
 import { WAITLIST_COLOR_THEME } from "../lib/waitlist";
 import type { WaitlistBoardData } from "../types";
 
-// Visual direction: bold, flat, confident color blocking and oversized type
-// (Pentagram / Paula Scher influence) rather than the Joker Jackpot TV's
-// neon-glow treatment — solid color bars carry each game's identity instead
-// of thin glowing borders, and type does the work instead of gradients.
-
 export function WaitlistTvPage() {
   const [data, setData] = useState<WaitlistBoardData | null>(() => api.cachedWaitlistBoard());
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
@@ -63,7 +58,10 @@ export function WaitlistTvPage() {
   const showBoard = data.totalWaiting > 0;
 
   return (
-    <main className="relative flex min-h-screen flex-col overflow-hidden bg-tv-bg font-sans">
+    <main
+      className="relative flex min-h-screen flex-col overflow-hidden font-sans"
+      style={{ background: "linear-gradient(160deg, #0a0a0b 0%, #161318 55%, #0a0a0b 100%)" }}
+    >
       {!isFullscreen && !isCleanDisplay ? (
         <button
           type="button"
@@ -77,10 +75,10 @@ export function WaitlistTvPage() {
       ) : null}
 
       <div className="relative z-10 flex flex-shrink-0 flex-col items-center gap-3 px-5 pt-[clamp(20px,3.5vh,44px)]">
-        <img src="/brand/playlive-logo.png" alt="PlayLive Melbourne" className="h-[clamp(20px,2.6vw,36px)] opacity-95" />
+        <img src="/brand/playlive-logo.png" alt="PlayLive Melbourne" className="h-[clamp(22px,3vw,42px)] opacity-95" />
         <div
-          className="text-center font-black uppercase leading-none tracking-[0.02em] text-white"
-          style={{ fontSize: "clamp(30px,4.4vw,68px)" }}
+          className="text-center font-black uppercase leading-tight tracking-wide text-white"
+          style={{ fontSize: "clamp(24px,3.4vw,58px)", textShadow: "0 0 40px rgba(198,157,66,0.35)" }}
         >
           TLT Waitlist
         </div>
@@ -88,38 +86,39 @@ export function WaitlistTvPage() {
 
       {showBoard ? (
         <div
-          className="relative z-10 grid flex-1 content-start gap-[clamp(16px,2.2vw,28px)] px-[clamp(20px,3vw,48px)] py-[clamp(24px,3.6vh,44px)]"
-          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(270px, 1fr))" }}
+          className="relative z-10 grid flex-1 content-start gap-[clamp(20px,2.6vw,34px)] px-[clamp(24px,3.6vw,56px)] py-[clamp(26px,4vh,48px)]"
+          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}
         >
           {data.columns.map((column) => {
             const theme = WAITLIST_COLOR_THEME[column.game.colorTag];
             return (
-              <div key={column.game.gameId} className="flex flex-col overflow-hidden rounded-[clamp(10px,1vw,16px)] bg-[#141416]">
-                <div className="px-[clamp(16px,2vw,26px)] py-[clamp(14px,2vh,22px)]" style={{ background: theme.accent }}>
-                  <div
-                    className="font-black uppercase leading-tight text-white"
-                    style={{ fontSize: "clamp(19px,2.3vw,32px)" }}
-                  >
+              <div
+                key={column.game.gameId}
+                className="flex flex-col overflow-hidden rounded-[clamp(14px,1.6vw,22px)]"
+                style={{ border: "clamp(2px,0.25vw,4px) solid " + theme.accent, boxShadow: `0 0 40px ${theme.glow}` }}
+              >
+                <div
+                  className="px-[clamp(18px,2.2vw,28px)] py-[clamp(16px,2.2vh,22px)]"
+                  style={{ background: "rgba(255,255,255,0.04)" }}
+                >
+                  <div className="font-black uppercase leading-tight text-white" style={{ fontSize: "clamp(18px,2.1vw,30px)" }}>
                     {column.game.gameName}
                   </div>
-                  <div
-                    className="mt-1 font-extrabold uppercase tracking-[0.1em] text-white/85"
-                    style={{ fontSize: "clamp(10px,1vw,14px)" }}
-                  >
+                  <div className="mt-1.5 font-semibold" style={{ color: theme.accent, fontSize: "clamp(11px,1.1vw,16px)" }}>
                     {column.game.running
                       ? `Running${column.game.tableNumbers ? ` · Tables ${column.game.tableNumbers}` : ""}`
-                      : "Interest"}
+                      : "Interest list"}
                   </div>
                 </div>
-                <div className="flex-1 px-[clamp(16px,2vw,26px)] py-[clamp(14px,2vh,20px)]">
+                <div className="flex-1 px-[clamp(18px,2.2vw,28px)] py-[clamp(16px,2.2vh,22px)]">
                   {column.waiting.length === 0 ? (
-                    <div className="text-white/35" style={{ fontSize: "clamp(13px,1.3vw,18px)" }}>
+                    <div className="text-white/40" style={{ fontSize: "clamp(13px,1.3vw,18px)" }}>
                       No one waiting yet
                     </div>
                   ) : (
-                    <div className="flex flex-col gap-[clamp(8px,1.2vh,14px)]">
+                    <div className="flex flex-col gap-[clamp(9px,1.3vh,14px)]">
                       {column.waiting.map((entry) => (
-                        <div key={entry.entryId} className="font-bold text-white" style={{ fontSize: "clamp(16px,1.9vw,26px)" }}>
+                        <div key={entry.entryId} className="font-bold text-white" style={{ fontSize: "clamp(15px,1.8vw,25px)" }}>
                           {entry.playerName}
                         </div>
                       ))}
@@ -127,42 +126,54 @@ export function WaitlistTvPage() {
                   )}
                 </div>
                 <div
-                  className="px-[clamp(16px,2vw,26px)] py-[clamp(10px,1.6vh,16px)] text-center font-black uppercase tracking-[0.06em] text-white"
+                  className="px-[clamp(18px,2.2vw,28px)] py-[clamp(11px,1.7vh,16px)] text-center font-extrabold text-white"
                   style={{ background: theme.accentDeep, fontSize: "clamp(12px,1.3vw,18px)" }}
                 >
-                  Waitlist · {column.waitingCount}
+                  {column.waitingCount} Waiting
                 </div>
               </div>
             );
           })}
         </div>
       ) : (
-        <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-[clamp(24px,4vh,48px)] px-6 text-center">
+        <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 py-10 text-center">
           <div
-            className="font-black uppercase leading-[0.95] text-white"
-            style={{ fontSize: "clamp(40px,7vw,120px)" }}
+            className="w-[min(960px,90vw)] rounded-[clamp(18px,2vw,28px)] px-[clamp(28px,4.5vw,64px)] py-[clamp(32px,5vh,60px)]"
+            style={{
+              border: "clamp(3px,0.3vw,5px) solid #C69D42",
+              boxShadow: "0 0 0 1px rgba(255,255,255,0.06) inset, 0 0 60px rgba(198,157,66,0.35)",
+              background: "rgba(10,8,10,0.72)"
+            }}
           >
-            Fast-Paced Action
-          </div>
-          <div className="font-semibold leading-snug text-white/70" style={{ fontSize: "clamp(16px,1.9vw,28px)" }}>
-            Ask a floor staff member to join the waitlist.
-          </div>
-          {data.columns.length ? (
-            <div className="flex flex-wrap items-center justify-center gap-[clamp(10px,1.6vw,18px)]">
-              {data.columns.map((column) => {
-                const theme = WAITLIST_COLOR_THEME[column.game.colorTag];
-                return (
-                  <div
-                    key={column.game.gameId}
-                    className="rounded-full px-[clamp(18px,2.4vw,26px)] py-[clamp(9px,1.4vh,14px)] font-black uppercase text-white"
-                    style={{ background: theme.accent, fontSize: "clamp(13px,1.4vw,19px)" }}
-                  >
-                    {column.game.gameName}
-                  </div>
-                );
-              })}
+            <div
+              className="font-black uppercase leading-tight text-white"
+              style={{ fontSize: "clamp(32px,5.2vw,76px)", textShadow: "0 0 40px rgba(198,157,66,0.35)" }}
+            >
+              Fast-Paced Action
             </div>
-          ) : null}
+            <div
+              className="mt-[clamp(14px,2.4vh,24px)] font-semibold leading-snug text-[#e6cf9f]"
+              style={{ fontSize: "clamp(15px,1.8vw,26px)" }}
+            >
+              Ask a floor staff member to join the waitlist.
+            </div>
+            {data.columns.length ? (
+              <div className="mt-[clamp(22px,3.6vh,38px)] flex flex-wrap justify-center gap-[clamp(10px,1.6vw,18px)]">
+                {data.columns.map((column) => {
+                  const theme = WAITLIST_COLOR_THEME[column.game.colorTag];
+                  return (
+                    <div
+                      key={column.game.gameId}
+                      className="rounded-full px-[clamp(16px,2.2vw,24px)] py-[clamp(8px,1.3vh,13px)] font-bold text-white"
+                      style={{ border: `2px solid ${theme.accent}`, fontSize: "clamp(13px,1.4vw,19px)" }}
+                    >
+                      {column.game.gameName}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
         </div>
       )}
     </main>
