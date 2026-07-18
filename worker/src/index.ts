@@ -2,6 +2,8 @@
 export interface Env {
   APPS_SCRIPT_URL: string;
   APPS_SCRIPT_TOKEN: string;
+  WAITLIST_APPS_SCRIPT_URL: string;
+  WAITLIST_APPS_SCRIPT_TOKEN: string;
   ALLOWED_ORIGINS?: string;
 }
 
@@ -42,6 +44,35 @@ const routes: Record<string, RouteConfig> = {
   "/api/waitlist/entries/remove": { methods: ["POST"] },
   "/api/waitlist/games/save": { methods: ["POST"] }
 };
+
+// The Waitlist feature lives on a completely separate Google Sheet and Apps
+// Script deployment from Joker Jackpot (own execution-time quota, zero shared
+// data). Staff still log in with one shared password, though: rather than
+// duplicating the Staff roster into the Waitlist sheet (which would drift out
+// of sync), every waitlist WRITE is authenticated here in the Worker by first
+// calling Joker Jackpot's existing, unmodified /api/auth/verify-pin route,
+// and only forwarded to the Waitlist Apps Script once that succeeds. Reads
+// (the board and bootstrap) need no auth and go straight to the Waitlist
+// upstream, same as every other public GET route in this app.
+const WAITLIST_PATH_PREFIX = "/api/waitlist/";
+const WAITLIST_AUTH_ROUTES = new Set([
+  "/api/waitlist/entries/create",
+  "/api/waitlist/entries/remove",
+  "/api/waitlist/games/save"
+]);
+
+type Upstream = { url: string; token: string };
+
+function jackpotUpstream(env: Env): Upstream {
+  return { url: env.APPS_SCRIPT_URL, token: env.APPS_SCRIPT_TOKEN };
+}
+
+function upstreamFor(env: Env, pathname: string): Upstream {
+  if (pathname.startsWith(WAITLIST_PATH_PREFIX)) {
+    return { url: env.WAITLIST_APPS_SCRIPT_URL, token: env.WAITLIST_APPS_SCRIPT_TOKEN };
+  }
+  return jackpotUpstream(env);
+}
 
 // Apps Script requests are inherently slow (typically multiple seconds).
 // Read-only GET routes are cached at the edge and kept as a stale fallback
@@ -148,14 +179,14 @@ function queryFromUrl(url: URL) {
   return query;
 }
 
-async function fetchUpstream(env: Env, pathname: string, method: string, query: Record<string, string>, body: unknown) {
-  const upstream = await fetch(env.APPS_SCRIPT_URL, {
+async function fetchUpstream(upstream: Upstream, pathname: string, method: string, query: Record<string, string>, body: unknown) {
+  const response = await fetch(upstream.url, {
     method: "POST",
     headers: {
       "content-type": "application/json"
     },
     body: JSON.stringify({
-      token: env.APPS_SCRIPT_TOKEN,
+      token: upstream.token,
       path: pathname,
       method,
       query,
@@ -164,9 +195,9 @@ async function fetchUpstream(env: Env, pathname: string, method: string, query: 
   });
 
   return {
-    ok: upstream.ok,
-    status: upstream.status,
-    text: await upstream.text()
+    ok: response.ok,
+    status: response.status,
+    text: await response.text()
   };
 }
 
@@ -182,7 +213,7 @@ function cachedResponse(text: string) {
 
 async function refreshReadCache(env: Env, pathname: string, search: string) {
   const url = new URL(`https://joker-manager-cache.internal${pathname}${search}`);
-  const upstream = await fetchUpstream(env, pathname, "GET", queryFromUrl(url), null);
+  const upstream = await fetchUpstream(upstreamFor(env, pathname), pathname, "GET", queryFromUrl(url), null);
 
   if (upstream.ok) {
     await edgeCache().put(cacheKeyFor(pathname, search), cachedResponse(upstream.text));
@@ -299,7 +330,21 @@ export default {
 
     try {
       const body = await readBody(request);
-      const upstream = await fetchUpstream(env, url.pathname, request.method, queryFromUrl(url), body);
+
+      if (WAITLIST_AUTH_ROUTES.has(url.pathname)) {
+        const bodyRecord = (body ?? {}) as Record<string, unknown>;
+        const authCheck = await fetchUpstream(jackpotUpstream(env), "/api/auth/verify-pin", "POST", {}, {
+          staffName: bodyRecord.staffName,
+          pin: bodyRecord.pin
+        });
+        const authPayload = authCheck.ok ? (JSON.parse(authCheck.text) as { ok: boolean; error?: string }) : { ok: false };
+
+        if (!authCheck.ok || !authPayload.ok) {
+          return json(request, env, { ok: false, error: authPayload.error ?? "[JM-WORKER-004] Authentication failed." }, 401);
+        }
+      }
+
+      const upstream = await fetchUpstream(upstreamFor(env, url.pathname), url.pathname, request.method, queryFromUrl(url), body);
 
       if (isCacheableGet && upstream.ok) {
         ctx.waitUntil(

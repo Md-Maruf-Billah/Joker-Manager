@@ -8,3 +8,8 @@ ALLOWED_ORIGINS = "https://joker-manager-playlive.pages.dev,http://localhost:517
 # Set secrets with:
 # wrangler secret put APPS_SCRIPT_URL
 # wrangler secret put APPS_SCRIPT_TOKEN
+#
+# The Waitlist feature uses a separate Google Sheet + separate Apps Script
+# Web App deployment (own quota pool, zero shared data with Joker Jackpot):
+# wrangler secret put WAITLIST_APPS_SCRIPT_URL
+# wrangler secret put WAITLIST_APPS_SCRIPT_TOKEN
