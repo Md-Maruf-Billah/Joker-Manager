@@ -206,6 +206,24 @@ async function fetchUpstream(upstream: Upstream, pathname: string, method: strin
   };
 }
 
+// Apps Script's own handleRequest_ try/catch always returns HTTP 200, even on
+// a business-logic failure — the actual result is signaled by `ok` inside the
+// JSON body (`{ok: false, error: "..."}`). `upstream.ok` above is only the
+// transport-level HTTP status, so it's true even for those error bodies.
+// Caching decisions must check the JSON body's `ok` too, or a transient
+// backend error gets cached and served to everyone as if it were valid data
+// for up to CACHE_RETAIN_SECONDS.
+function upstreamSucceeded(upstream: { ok: boolean; text: string }): boolean {
+  if (!upstream.ok) {
+    return false;
+  }
+  try {
+    return (JSON.parse(upstream.text) as { ok?: boolean }).ok !== false;
+  } catch {
+    return false;
+  }
+}
+
 function cachedResponse(text: string) {
   return new Response(text, {
     headers: {
@@ -220,7 +238,7 @@ async function refreshReadCache(env: Env, pathname: string, search: string) {
   const url = new URL(`https://joker-manager-cache.internal${pathname}${search}`);
   const upstream = await fetchUpstream(upstreamFor(env, pathname), pathname, "GET", queryFromUrl(url), null);
 
-  if (upstream.ok) {
+  if (upstreamSucceeded(upstream)) {
     await edgeCache().put(cacheKeyFor(pathname, search), cachedResponse(upstream.text));
   }
 }
@@ -350,15 +368,16 @@ export default {
       }
 
       const upstream = await fetchUpstream(upstreamFor(env, url.pathname), url.pathname, request.method, queryFromUrl(url), body);
+      const upstreamOk = upstreamSucceeded(upstream);
 
-      if (isCacheableGet && upstream.ok) {
+      if (isCacheableGet && upstreamOk) {
         ctx.waitUntil(
           cache.put(
             cacheKey,
             cachedResponse(upstream.text)
           )
         );
-      } else if (MUTATING_ROUTES.has(url.pathname) && upstream.ok) {
+      } else if (MUTATING_ROUTES.has(url.pathname) && upstreamOk) {
         await purgeReadCache(ctx);
         ctx.waitUntil(warmReadCache(env));
       }

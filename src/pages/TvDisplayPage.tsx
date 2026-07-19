@@ -105,7 +105,7 @@ export function TvDisplayPage() {
     );
   }
 
-  const showMessage = data.tvMessage.active;
+  const showMessage = data.tvMessage?.active ?? false;
   const theme = showMessage ? TIER_THEME.message : TIER_THEME[data.tier];
   const topHeading = showMessage ? "ANNOUNCEMENT" : "JOKER JACKPOT";
   const outerHeadline = showMessage ? "Staff announcement" : data.copy.headline;

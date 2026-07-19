@@ -200,7 +200,11 @@ export const api = {
     return readCachedData<DashboardData>("/api/dashboard");
   },
   cachedTv(): TvDisplayData | null {
-    return readCachedData<TvDisplayData>("/api/tv");
+    // A cached snapshot can outlive an app update (or briefly reflect a
+    // transient upstream error response) — never trust it blindly before the
+    // render path uses it unconditionally right after this.
+    const data = readCachedData<TvDisplayData>("/api/tv");
+    return data && typeof data === "object" && "tvMessage" in data ? data : null;
   },
   cachedAddTournamentBootstrap(): AddTournamentBootstrapData | null {
     return readCachedData<AddTournamentBootstrapData>("/api/bootstrap/add-tournament");
