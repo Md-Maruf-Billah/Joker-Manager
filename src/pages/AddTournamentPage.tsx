@@ -19,7 +19,7 @@ export function AddTournamentPage() {
   const [initialBootstrap] = useState(() => api.cachedAddTournamentBootstrap());
   const [types, setTypes] = useState<TournamentType[]>(() => initialBootstrap?.tournamentTypes ?? []);
   const [dashboard, setDashboard] = useState<DashboardData | null>(() => initialBootstrap?.dashboard ?? null);
-  const [tournamentTypeId, setTournamentTypeId] = useState(() => initialBootstrap?.tournamentTypes[0]?.id ?? "");
+  const [tournamentTypeId, setTournamentTypeId] = useState(() => initialBootstrap?.tournamentTypes?.[0]?.id ?? "");
   const [entries, setEntries] = useState("");
   const [pin, setPin] = useState("");
   const [message, setMessage] = useState("");

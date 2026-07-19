@@ -21,7 +21,11 @@ export function WaitlistTvPage() {
     }
 
     void load({ bypassCache: Boolean(data) }).catch(() => undefined);
-    const interval = window.setInterval(() => void load().catch(() => undefined), 30_000);
+    // Unlike the Joker Jackpot TV, this board needs to catch up almost
+    // immediately when someone's added, seated, or removed on the floor —
+    // the board read is edge-cached and writes already warm it, so a short
+    // interval here is cheap and doesn't add real load on the backend.
+    const interval = window.setInterval(() => void load().catch(() => undefined), 4_000);
 
     return () => {
       alive = false;

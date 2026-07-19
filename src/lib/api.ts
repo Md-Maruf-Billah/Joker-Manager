@@ -83,7 +83,16 @@ function cachedKey(path: string) {
   return `${API_CACHE_PREFIX}${path}`;
 }
 
-function readCachedData<T>(path: string): T | null {
+// A cached snapshot can outlive an app update, or (more rarely) briefly
+// reflect a transient upstream error response that slipped past the Worker's
+// own caching checks. Every page seeds its initial render straight from this
+// value with no further validation, so an unexpected shape here doesn't just
+// show stale data — it crashes the render before the corrective fetch in
+// useEffect ever gets a chance to run, permanently stuck until the entry is
+// manually cleared. Requiring the caller to name the fields it actually reads
+// closes that off: a snapshot missing them is treated as no cache at all,
+// letting the page fall back to its skeleton and self-heal on the next fetch.
+function readCachedData<T extends object>(path: string, requiredKeys: (keyof T)[]): T | null {
   const storage = localStorageOrNull();
   const raw = storage?.getItem(cachedKey(path));
 
@@ -92,7 +101,12 @@ function readCachedData<T>(path: string): T | null {
   }
 
   try {
-    return (JSON.parse(raw) as CachedSnapshot<T>).data;
+    const data = (JSON.parse(raw) as CachedSnapshot<T>).data;
+    if (!data || typeof data !== "object" || !requiredKeys.every((key) => key in data)) {
+      storage?.removeItem(cachedKey(path));
+      return null;
+    }
+    return data;
   } catch {
     storage?.removeItem(cachedKey(path));
     return null;
@@ -197,32 +211,28 @@ async function request<T>(path: string, init?: RequestInit, options: RequestOpti
 
 export const api = {
   cachedDashboard(): DashboardData | null {
-    return readCachedData<DashboardData>("/api/dashboard");
+    return readCachedData<DashboardData>("/api/dashboard", ["jackpotState"]);
   },
   cachedTv(): TvDisplayData | null {
-    // A cached snapshot can outlive an app update (or briefly reflect a
-    // transient upstream error response) — never trust it blindly before the
-    // render path uses it unconditionally right after this.
-    const data = readCachedData<TvDisplayData>("/api/tv");
-    return data && typeof data === "object" && "tvMessage" in data ? data : null;
+    return readCachedData<TvDisplayData>("/api/tv", ["tvMessage"]);
   },
   cachedAddTournamentBootstrap(): AddTournamentBootstrapData | null {
-    return readCachedData<AddTournamentBootstrapData>("/api/bootstrap/add-tournament");
+    return readCachedData<AddTournamentBootstrapData>("/api/bootstrap/add-tournament", ["tournamentTypes", "dashboard"]);
   },
   cachedDrawBootstrap(): DrawBootstrapData | null {
-    return readCachedData<DrawBootstrapData>("/api/bootstrap/draw");
+    return readCachedData<DrawBootstrapData>("/api/bootstrap/draw", ["cards"]);
   },
   cachedHistoryBootstrap(): HistoryBootstrapData | null {
-    return readCachedData<HistoryBootstrapData>("/api/bootstrap/history");
+    return readCachedData<HistoryBootstrapData>("/api/bootstrap/history", ["runs", "dashboard"]);
   },
   cachedAdminBootstrap(): AdminBootstrapData | null {
-    return readCachedData<AdminBootstrapData>("/api/bootstrap/admin");
+    return readCachedData<AdminBootstrapData>("/api/bootstrap/admin", ["dashboard", "tournamentTypes", "staffList"]);
   },
   cachedWaitlistBootstrap(): WaitlistBootstrapData | null {
-    return readCachedData<WaitlistBootstrapData>("/api/waitlist/bootstrap");
+    return readCachedData<WaitlistBootstrapData>("/api/waitlist/bootstrap", ["games", "board"]);
   },
   cachedWaitlistBoard(): WaitlistBoardData | null {
-    return readCachedData<WaitlistBoardData>("/api/waitlist/board");
+    return readCachedData<WaitlistBoardData>("/api/waitlist/board", ["columns", "totalWaiting"]);
   },
   verifyPin(staffName: string, pin: string): Promise<StaffSession> {
     if (!API_BASE_URL) {

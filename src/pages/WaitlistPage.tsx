@@ -1,4 +1,4 @@
-import { FormEvent, DragEvent, useEffect, useState } from "react";
+import { FormEvent, DragEvent, useEffect, useRef, useState } from "react";
 import { clsx } from "clsx";
 import {
   Armchair,
@@ -69,6 +69,8 @@ export function WaitlistPage() {
 
   const [reorderEnabled, setReorderEnabled] = useState(false);
   const [draggedEntryId, setDraggedEntryId] = useState<string | null>(null);
+  const draggedEntryIdRef = useRef<string | null>(null);
+  draggedEntryIdRef.current = draggedEntryId;
 
   const [runningModal, setRunningModal] = useState<RunningModalState | null>(null);
   const [runningModalError, setRunningModalError] = useState("");
@@ -106,7 +108,13 @@ export function WaitlistPage() {
     void load({ bypassCache: Boolean(initialBootstrap) }).catch((err) =>
       setLoadError(errorMessage(err, "JM-WL-001", "Could not load waitlist."))
     );
-    const interval = window.setInterval(() => void load().catch(() => undefined), 20_000);
+    // Short interval so other staff devices (and the TV) catch up almost
+    // immediately — skipped mid-drag so a poll can't snap a row back to its
+    // server position while someone's still dragging it.
+    const interval = window.setInterval(() => {
+      if (draggedEntryIdRef.current) return;
+      void load().catch(() => undefined);
+    }, 5_000);
     return () => window.clearInterval(interval);
   }, []);
 
